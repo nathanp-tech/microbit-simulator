@@ -77,6 +77,7 @@ async function startLive() {
     $('loginCard').hidden = true;
     $('liveArea').hidden = false;
     showServerInfo(); // now with the teacher password: the class code is in the link
+    await loadTeacherRoster(); // the class lists need the password too: load them again now
     await refreshLive();
     clearInterval(T.liveTimer);
     // every 3 s with the class server, every 5 s online (database quota)
