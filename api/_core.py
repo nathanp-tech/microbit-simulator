@@ -577,11 +577,14 @@ class Api:
             return 200, {'type': 'mb-class-backup', 'exportedAt': time.strftime('%Y-%m-%dT%H:%M:%S'), 'works': self.all_works(sorted(snaps)),
                          'roster': self.roster()}
         if path == '/api/solutions':
-            # answer key of the guided challenges (teacher preview); generated from tests/solutions_src.js
-            try:
-                sol = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_solutions.json'), encoding='utf-8'))
-            except (OSError, ValueError):
-                sol = {}
+            # answer key of the challenges (teacher preview): in the database (put-solutions), else api/_solutions.json
+            # (kept out of git: generated from tests/solutions_src.js)
+            sol = self.get_json('solutions')
+            if not sol:
+                try:
+                    sol = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_solutions.json'), encoding='utf-8'))
+                except (OSError, ValueError):
+                    sol = {}
             return 200, {'solutions': sol}
         if path == '/api/backups':
             return 200, {'backups': [b for b in (jload(x) for x in self.r(['LRANGE', P + 'backups', 0, -1])[0] or []) if b][::-1]}
@@ -876,6 +879,12 @@ class Api:
                 st.update({'rev': rev, 'validated': []})
                 self.r(['SET', P + 'work:' + sid, json.dumps(work)], ['HSET', P + 'snap', sid, json.dumps(snap)], ['SET', P + 'st:' + sid, json.dumps(st)], srev)
                 return 200, {'ok': True, 'rev': rev}
+            if action == 'put-solutions':
+                # the answer key, sent by the teacher (never in a public file)
+                if not isinstance(data.get('solutions'), dict):
+                    return 400, {'error': 'bad answer key'}
+                self.r(['SET', P + 'solutions', json.dumps(data['solutions'])])
+                return 200, {'ok': True, 'challenges': len(data['solutions'])}
             if action == 'clear-extras':
                 # Part of "reset a student": program history, teacher comments, help request.
                 sid = str(data.get('studentId', ''))

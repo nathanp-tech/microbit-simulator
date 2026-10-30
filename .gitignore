@@ -5,3 +5,9 @@ tools/
 .DS_Store
 .vercel
 __pycache__/
+
+# Never public: the students' names and the answer key (they live in the database online,
+# and in these local files for the class server and the tests)
+api/_roster.json
+api/_solutions.json
+tests/solutions_src.js

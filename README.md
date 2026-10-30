@@ -59,7 +59,9 @@ The dashboard of the EV3 Simulator, adapted:
 - **⚙️ Manage:** pass score, modes, class lists (one code per class, created automatically; *Paste from Excel*), students (rename, class, unlock, reset, download, delete), backups, database usage.
 - **🎓 Student view:** the student app with every challenge open and **🔑 Solution** (answer key). Nothing is saved for students.
 
-Class lists: `api/_roster.json` is the default (classes Tech5ENa to Tech5ENe). Change them in Manage → Class lists.
+Class lists: change them in Manage → Class lists. `api/_roster.json` is the default list of the class server on this computer.
+
+**Never in git (the repository can be public):** `api/_roster.json` (names of the students), `api/_solutions.json` and `tests/solutions_src.js` (answer key) are in `.gitignore`. Online, the class lists and the answer key live in the database: the lists are saved from Manage → Class lists, the answer key is sent with `python3 tests/upload_solutions.py https://<your-app>.vercel.app <teacher password>`.
 
 ## Online hosting (Vercel)
 
@@ -68,7 +70,7 @@ Same as the EV3 Simulator: `api/index.py` stores the data in an Upstash Redis da
 ## Tests
 
 Run the class server with a test folder (the class data is never touched): `MB_DATA_DIR=/tmp/mbtest python3 server.py 8101 --no-browser`, then:
-- `tests/selftest.html` (open `http://localhost:8101/tests/selftest.html`): every reference solution scores 100 %, an empty program 0 %, every wrong program fails its criterion, plus the tests of the block engine. It also prints the answer key: after changing `tests/solutions_src.js`, copy it into `api/_solutions.json`.
+- `tests/selftest.html` (open `http://localhost:8101/tests/selftest.html`): every reference solution scores 100 %, an empty program 0 %, every wrong program fails its criterion, plus the tests of the block engine. It also prints the answer key: after changing `tests/solutions_src.js`, copy it into `api/_solutions.json`, then send it online with `tests/upload_solutions.py`.
 - `python3 tests/apitest.py http://localhost:8101`: every API endpoint.
 
 ## Structure
