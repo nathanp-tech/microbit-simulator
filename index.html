@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>micro:bit Simulator</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/makecode.css">
+</head>
+<body class="mc">
+  <header id="mcHeader">
+    <div class="mc-brand">
+      <svg viewBox="0 0 34 24"><rect x="1.5" y="1.5" width="31" height="21" rx="10.5" fill="none" stroke="#fff" stroke-width="3"/><circle cx="11" cy="12" r="3" fill="#fff"/><circle cx="23" cy="12" r="3" fill="#fff"/></svg>
+      <span>micro:bit</span><span class="sep"></span><small>Simulator</small>
+    </div>
+    <div class="mc-toggle" id="editorToggle">
+      <button id="tabBlocks" class="on" title="Blocks"><svg viewBox="0 0 24 24"><path d="M19 7h-2.2A3 3 0 0 0 11 6.2 3 3 0 0 0 10.8 7H5a1 1 0 0 0-1 1v4h1.5a2.5 2.5 0 0 1 0 5H4v3a1 1 0 0 0 1 1h4v-1.5a2.5 2.5 0 0 1 5 0V21h5a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/></svg>Blocks</button>
+      <button id="tabJs" title="JavaScript"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3zm4.7 15.1c.4.8 1.2 1.5 2.5 1.5 1.5 0 2.5-.8 2.5-2.5v-5.6h-1.8v5.6c0 .8-.3 1.1-.9 1.1s-.8-.4-1.1-.9zm6.3-.2c.5 1 1.6 1.7 3.1 1.7 1.6 0 2.8-.8 2.8-2.3 0-1.4-.8-2-2.2-2.6l-.4-.2c-.7-.3-1-.5-1-1 0-.4.3-.7.8-.7s.8.2 1.1.7l1.4-.9c-.6-1-1.4-1.4-2.5-1.4-1.5 0-2.5 1-2.5 2.3 0 1.4.8 2 2.1 2.6l.4.2c.8.3 1.2.5 1.2 1.1 0 .5-.4.8-1.1.8-.8 0-1.3-.4-1.7-1z"/></svg>JavaScript</button>
+      <button class="arrow" id="tabMore" title="More languages"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 8l7 7 7-7-1.8-1.8L12 11.4 6.8 6.2z"/></svg></button>
+    </div>
+    <div class="mc-right">
+      <span class="sync" id="syncStatus" title="Connection to the teacher's dashboard"></span>
+      <button id="btnHelpMe" class="help-me" title="Ask your teacher for help">🙋 I need help</button>
+      <div id="helpQueue" class="help-queue" hidden></div>
+      <span class="mc-student" id="studentChip" title="Student"><span id="chipName"></span></span>
+      <button class="mc-icon" id="btnHome" title="Home: all the challenges"><svg viewBox="0 0 24 24"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg></button>
+      <button class="mc-icon" id="btnHelp" title="Help"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2zm2.1-7.7-.9.9c-.7.7-1.2 1.3-1.2 2.8h-2v-.5c0-1.1.5-2.1 1.2-2.8l1.2-1.3c.4-.3.6-.8.6-1.4a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0c0 .9-.4 1.7-.9 2.3z"/></svg></button>
+      <button class="mc-icon" id="btnSettings" title="More…"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1l-.4-2.6h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L4.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+    </div>
+    <div class="mc-menu" id="settingsMenu" hidden>
+      <button id="mSave">💾 Save my work (download a copy)</button>
+      <button id="mSwitch">🔁 Switch mode</button>
+      <button id="mNewProject">🆕 New project (free programming)</button>
+      <hr>
+      <button id="mExit">🚪 Exit / change student</button>
+    </div>
+  </header>
+  <div id="examBanner" class="exam-banner" hidden></div>
+  <div id="saveReminder" class="save-reminder" hidden>💾 Remember to save your work on this computer. <button id="btnReminderSave">Save now</button> <button id="btnReminderLater" class="link">later</button></div>
+
+  <main id="mcMain">
+    <aside id="simPanel">
+      <div id="challengeBox" class="mc-tut" hidden>
+        <div class="mc-tut-head"><h2 id="challengeTitle"></h2><span class="count" id="challengeMeta"></span></div>
+        <div id="stepper" class="mc-steps"></div>
+        <div class="mc-tut-body">
+          <div id="challengeDesc" class="desc"></div>
+          <div id="hintBox" class="hints"></div>
+          <div class="mc-tut-actions">
+            <button id="btnHint" class="mc-btn" title="Show a hint">💡 Hint</button>
+            <button id="btnSolution" class="mc-btn" title="Teacher preview: the reference solution" hidden>🔑 Solution</button>
+            <span style="flex:1"></span>
+            <button id="btnEvaluate" class="mc-btn green">✅ Check my answer</button>
+          </div>
+          <div id="practiceResult" class="mc-result"></div>
+          <div id="validateBox"></div>
+        </div>
+      </div>
+      <div id="notesPanel" class="card notes-panel" hidden></div>
+      <div id="boards" class="mc-boards"></div>
+      <div class="sim-toolbar" id="simToolbar">
+        <div class="grp">
+          <button id="simPlay" class="play" title="Stop the simulator"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>
+          <button id="simRestart" title="Restart the simulator"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+          <button id="simSlow" title="Slow-Mo: run the program slowly"><svg viewBox="0 0 24 24"><path d="M20 8h-2.8a6 6 0 0 0-1.4-1.6L17.4 5 16 3.6l-2.2 2.2a6 6 0 0 0-3.6 0L8 3.6 6.6 5l1.6 1.4A6 6 0 0 0 6.8 8H4v2h2.1a6 6 0 0 0 0 2H4v2h2.8a6 6 0 0 0 10.4 0H20v-2h-2.1a6 6 0 0 0 0-2H20zm-6 8h-4v-2h4zm0-4h-4v-2h4z"/></svg></button>
+          <button id="simMute" title="Mute audio"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></button>
+        </div>
+        <div class="grp">
+          <button id="simShot" title="Take a screenshot of the simulator"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg></button>
+          <button id="simFull" title="Launch in fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5zm9 0h5v5h-2V7h-3zM5 14h2v3h3v2H5zm12 0h2v5h-5v-2h3z"/></svg></button>
+        </div>
+      </div>
+      <div id="simError" class="mc-sim-error" hidden></div>
+      <div id="showData" class="show-data" hidden>
+        <button id="btnShowData" title="Show the data sent by the serial port"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 20h2V10H4zm5 0h2V4H9zm5 0h2v-7h-2zm5 0h2V8h-2z" fill="#333"/></svg><b>Show data</b> Simulator</button>
+      </div>
+    </aside>
+    <section id="editorArea">
+      <div id="blocklyDiv"></div>
+      <div id="jsView" class="mc-js" hidden><div class="mc-js-note">This is the JavaScript of your blocks (read only). Go back to <b>Blocks</b> to change your program.</div><pre id="jsCode"></pre></div>
+      <div id="dataView" class="mc-data" hidden>
+        <div class="mc-data-head"><button class="mc-btn" id="dataBack">← Go back</button><b>Simulator data</b><span style="flex:1"></span><button class="mc-btn" id="dataClear">Clear</button></div>
+        <canvas id="dataChart"></canvas>
+        <div class="console" id="dataConsole"></div>
+      </div>
+      <div id="quizView" class="mc-quiz" hidden></div>
+    </section>
+  </main>
+
+  <footer id="mcFooter">
+    <div class="mc-foot-left">
+      <button id="btnDownload" class="mc-download" title="Download"><svg viewBox="0 0 24 24"><path d="M11 3h2v10.2l3.6-3.6L18 11l-6 6-6-6 1.4-1.4 3.6 3.6zM5 19h14v2H5z"/></svg>Download</button>
+      <button id="btnDownloadMore" class="mc-download-more" title="More download options">…</button>
+    </div>
+    <div class="mc-project">
+      <input id="projectName" placeholder="Pick a name..." autocomplete="off" spellcheck="false">
+      <button id="btnSaveProject" title="Save"><svg viewBox="0 0 24 24"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10z"/></svg></button>
+    </div>
+    <div class="mc-foot-spacer"></div>
+    <div class="mc-btn-pair">
+      <button id="btnUndo" title="Undo"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.6-3.6A8 8 0 0 1 20.1 16l2.4-.8A10.5 10.5 0 0 0 12.5 8z"/></svg></button>
+      <button id="btnRedo" title="Redo"><svg viewBox="0 0 24 24"><path d="M18.4 10.6A10.5 10.5 0 0 0 1.5 15.2l2.4.8A8 8 0 0 1 16.6 12.4L13 16h9V7z"/></svg></button>
+    </div>
+    <div class="mc-btn-pair">
+      <button id="btnZoomOut" title="Zoom Out"><svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg></button>
+      <button id="btnZoomIn" title="Zoom In"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></button>
+    </div>
+  </footer>
+
+  <div id="welcome" class="welcome">
+    <div class="welcome-card">
+      <div class="brand big"><span class="logo">micro:bit</span><span>Simulator</span></div>
+      <h1>Hello! 👋</h1>
+      <input id="wName" type="hidden" value=""><input id="wClass" type="hidden" value="">
+      <div id="wCodeStep" hidden>
+        <p class="wq">🔑 Class code</p>
+        <div class="wcode"><input id="wCode" autocomplete="off" inputmode="text" placeholder="code"><button class="primary" id="wCodeGo">OK</button></div>
+        <p class="muted">Ask your teacher for the code, or scan the QR code shown in class.</p>
+      </div>
+      <div id="wPick">
+        <p class="wq">1. Your class</p>
+        <div id="wClasses" class="wclasses"></div>
+        <div id="wNameStep" hidden>
+          <p class="wq">2. Your name</p>
+          <div id="wNames" class="wnames"></div>
+        </div>
+        <button id="wOtherCode" class="link" title="Type the code of another class">🔑 Not my class? Type another class code</button>
+      </div>
+      <div id="wMe" class="wme" hidden><span id="wMeText"></span> <button id="wChange" class="link">Not you? Change</button></div>
+      <p class="wq" id="wModeTitle">What do you want to do?</p>
+      <div class="choices" id="wChoices">
+        <button class="choice guided" data-mode="guided"><span class="cicon">🧭</span><b>Challenges</b><span>The challenges of your lessons, one after the other. Check your answer to unlock the next one.</span></button>
+        <button class="choice free" data-mode="free"><span class="cicon">🛠️</span><b>Free programming</b><span>Build and test any program you like in the simulator.</span></button>
+      </div>
+      <p class="muted wsave">☁️ Your work is saved automatically. Next time, choose your class and your name again to continue.</p>
+      <p id="wError" class="werr"></p>
+      <div class="welcome-alt">
+        <button id="wContinue" hidden></button>
+        <button id="wOpen">📂 Continue from my saved file</button>
+        <input type="file" id="wFile" accept=".json" hidden>
+        <span style="flex:1"></span>
+        <button id="wTeacher" class="link" title="Teacher dashboard (password)">👩‍🏫 Teacher</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="overlay" hidden><div class="ov-box"><div class="ov-icon">👀</div><h1>Eyes on your teacher</h1><p>Your screen is paused for a moment.</p></div></div>
+  <div id="closedOverlay" class="overlay" hidden><div class="ov-box"><div class="ov-icon">🔒</div><h1>Your class is closed right now</h1><p>Your work is saved. You can come back when your teacher opens the class.</p><button id="closedExit" class="primary">Exit</button></div></div>
+  <div id="examOverlay" class="overlay" hidden><div class="ov-box" id="examOverlayBody"></div></div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="lib/blockly/blockly_compressed.js"></script>
+  <script src="lib/blockly/msg/en.js"></script>
+  <script src="js/mbdata.js"></script>
+  <script src="js/fields.js"></script>
+  <script src="js/blocks.js"></script>
+  <script src="js/generator.js"></script>
+  <script src="js/runtime.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/challenges.js"></script>
+  <script src="js/evaluator.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/roster.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/classroom.js"></script>
+</body>
+</html>

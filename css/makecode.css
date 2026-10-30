@@ -1,0 +1,251 @@
+/* The MakeCode for micro:bit editor look (pxt-microbit light theme). */
+:root {
+  --mc-blue: #3454D1;
+  --mc-blue-dark: #2a43a8;
+  --mc-purple: #6633cc;
+  --mc-purple-hover: #5C2EB8;
+  --mc-bg: #ECF0F1;
+  --sim-w: 330px;
+  --mc-font: Roboto, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+body.mc { font-family: var(--mc-font); background: var(--mc-bg); font-size: 14px; }
+
+/* ---------- Header ---------- */
+#mcHeader { height: 56px; flex: 0 0 56px; background: var(--mc-blue); color: #fff; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 16px; position: relative; z-index: 60; }
+.mc-brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 500; white-space: nowrap; letter-spacing: 0.2px; }
+.mc-brand svg { width: 34px; height: 24px; }
+.mc-brand .sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.7); }
+.mc-brand small { font-weight: 300; font-size: 15px; opacity: 0.9; }
+.mc-toggle { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; background: rgba(0, 0, 0, 0.18); border-radius: 22px; padding: 3px; height: 44px; }
+.mc-toggle button { border: none; background: transparent; color: #fff; font-size: 16px; font-weight: 500; height: 38px; padding: 0 22px; border-radius: 19px; display: flex; align-items: center; gap: 8px; }
+.mc-toggle button svg { width: 18px; height: 18px; fill: currentColor; }
+.mc-toggle button.on { background: #fff; color: var(--mc-blue); }
+.mc-toggle button:not(.on):hover { background: rgba(255, 255, 255, 0.12); }
+.mc-toggle .arrow { padding: 0 12px; border-left: 1px solid rgba(255, 255, 255, 0.35); border-radius: 0 19px 19px 0; }
+.mc-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.mc-icon { border: none; background: transparent; color: #fff; width: 48px; height: 48px; border-radius: 4px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.mc-icon:hover { background: #1d3282; }
+.mc-icon svg { width: 24px; height: 24px; fill: #fff; }
+.mc-student { background: rgba(255, 255, 255, 0.16); border-radius: 16px; padding: 6px 12px; font-weight: 500; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+#mcHeader .sync { color: rgba(255, 255, 255, 0.85); font-size: 12px; }
+#mcHeader .sync.on { color: #c8f7d2; }
+#mcHeader .help-me { border: none; border-radius: 16px; background: #fff3cf; color: #7a4b00; padding: 6px 12px; font-weight: 600; }
+#mcHeader .help-me:hover { background: #ffe39a; }
+#mcHeader .help-me.waiting { background: #f0a020; color: #fff; }
+.mc-menu { position: absolute; right: 8px; top: 54px; background: #fff; color: #333; border-radius: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); min-width: 230px; padding: 6px 0; z-index: 1100; }
+.mc-menu button { display: block; width: 100%; text-align: left; border: none; border-radius: 0; padding: 10px 18px; background: #fff; font-size: 15px; }
+.mc-menu button:hover { background: #f0f0f0; }
+.mc-menu hr { border: none; border-top: 1px solid #e5e5e5; margin: 4px 0; }
+
+/* ---------- Main area ---------- */
+#mcMain { flex: 1; display: flex; min-height: 0; position: relative; }
+#simPanel { width: var(--sim-w); flex: 0 0 var(--sim-w); background: #fff; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; border-right: 1px solid #dcdcdc; }
+#editorArea { flex: 1; position: relative; min-width: 0; }
+#blocklyDiv { position: absolute; inset: 0; }
+.mc-boards { display: flex; gap: 6px; padding: 14px 12px 4px; justify-content: center; }
+.mc-boards.two .sim-board-wrap { flex: 1 1 0; }
+.sim-board-wrap { flex: 0 1 100%; max-width: 100%; transition: transform 0.05s; }
+.sim-board-wrap svg.sim { width: 100%; height: auto; display: block; }
+.sim-text { font-family: "Lucida Console", Monaco, monospace; font-size: 25px; fill: #fff; pointer-events: none; }
+.sim-text-small, .sim-text-pin { font-family: "Lucida Console", Monaco, monospace; font-size: 20px; fill: #fff; pointer-events: none; }
+.sim-button-group { cursor: pointer; }
+.sim-button { pointer-events: none; }
+.sim-button-outer:hover { stroke: grey; stroke-width: 3px; }
+.sim-pin-touch { cursor: pointer; }
+.sim-pin-touch:hover { stroke: #D4AF37; stroke-width: 2px; }
+.sim-pin-touch.touched { stroke: darkorange !important; stroke-width: 5px; }
+.sim-light-level-button, .sim-thermometer { cursor: ns-resize; }
+.sim-head { cursor: pointer; }
+.sim-shake { stroke: #fff; }
+
+/* Simulator toolbar (under the board) */
+.sim-toolbar { display: flex; justify-content: center; padding: 6px 0 10px; }
+.sim-toolbar .grp { display: flex; background: #e0e1e2; border-radius: 4px; overflow: hidden; }
+.sim-toolbar .grp + .grp { margin-left: 6px; }
+.sim-toolbar button { border: none; border-radius: 0; background: #e0e1e2; width: 42px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; color: rgba(0, 0, 0, 0.62); }
+.sim-toolbar button:hover { background: #cacbcd; }
+.sim-toolbar button svg { width: 18px; height: 18px; fill: currentColor; }
+.sim-toolbar button.play svg { fill: #107c10; }
+.sim-toolbar button.on { background: #cacbcd; color: #000; }
+.mc-sim-error { margin: 0 12px 8px; background: #fde7e9; color: #a4262c; border-radius: 6px; padding: 8px 10px; font-size: 13px; font-weight: 500; }
+.show-data { margin: 0 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.show-data button { border: 4px solid var(--mc-purple); border-radius: 30px; background: #fff; padding: 7px 10px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.show-data button b { font-weight: 600; }
+.show-data button:hover { background: #f3eefc; }
+
+/* ---------- Challenge card (like a MakeCode tutorial) ---------- */
+.mc-tut { border-bottom: 1px solid #e3e3e3; display: flex; flex-direction: column; }
+.mc-tut-head { background: var(--mc-blue); color: #fff; padding: 9px 12px; display: flex; align-items: center; gap: 8px; }
+.mc-tut-head h2 { margin: 0; font-size: 16px; font-weight: 500; flex: 1; line-height: 1.25; }
+.mc-tut-head .count { font-size: 12px; background: rgba(255, 255, 255, 0.2); border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+.mc-tut-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
+.mc-tut-body .desc { background: none; padding: 0; }
+.mc-tut-body .skills { color: #777; font-size: 12px; display: block; margin-top: 4px; }
+.mc-tut-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mc-btn { border: none; border-radius: 4px; padding: 8px 14px; font-size: 14px; font-weight: 600; background: #e0e1e2; color: rgba(0, 0, 0, 0.7); }
+.mc-btn:hover { background: #cacbcd; }
+.mc-btn.purple { background: var(--mc-purple); color: #fff; }
+.mc-btn.purple:hover { background: var(--mc-purple-hover); }
+.mc-btn.green { background: #107c10; color: #fff; }
+.mc-btn.green:hover { background: #0b5a0b; }
+.mc-btn:disabled { opacity: 0.5; }
+.mc-steps { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 2px; }
+.mc-unit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mc-unit-label { font-size: 11px; color: #777; width: 100%; font-weight: 600; }
+.mc-unit.on .mc-unit-label { color: var(--mc-blue); }
+.mc-dot { width: 26px; height: 26px; border-radius: 50%; padding: 0; font-size: 11px; font-weight: 700; border: 2px solid #c9c9c9; background: #fff; color: #888; display: flex; align-items: center; justify-content: center; }
+.mc-dot.open { border-color: var(--mc-blue); color: var(--mc-blue); }
+.mc-dot.validated { background: #107c10; border-color: #107c10; color: #fff; }
+.mc-dot.locked { background: #f1f1f1; color: #bbb; cursor: not-allowed; }
+.mc-dot.current { box-shadow: 0 0 0 3px rgba(52, 84, 209, 0.35); }
+.mc-dot.quiz { border-radius: 6px; }
+.mc-result { font-size: 13px; }
+.mc-result .criteria li { padding: 3px 0; }
+
+/* ---------- Bottom editor toolbar ---------- */
+#mcFooter { height: 58px; flex: 0 0 58px; background: #fff; border-top: 1px solid #dcdcdc; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 0; z-index: 50; }
+.mc-foot-left { width: var(--sim-w); flex: 0 0 var(--sim-w); display: flex; padding: 0 12px; }
+.mc-download { flex: 1; height: 42px; border: none; border-radius: 4px 0 0 4px; background: var(--mc-purple); color: #fff; font-size: 17px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.mc-download:hover { background: var(--mc-purple-hover); }
+.mc-download svg { width: 18px; height: 18px; fill: #fff; }
+.mc-download-more { height: 42px; width: 52px; border: none; border-radius: 0 4px 4px 0; background: var(--mc-purple); color: #fff; font-size: 20px; border-left: 1px solid rgba(255, 255, 255, 0.25); font-weight: 900; letter-spacing: 1px; }
+.mc-download-more:hover { background: var(--mc-purple-hover); }
+.mc-project { display: flex; height: 40px; }
+.mc-project input { width: 220px; border: 1px solid #ccc; border-right: none; border-radius: 4px 0 0 4px; padding: 0 12px; font-size: 15px; color: #333; }
+.mc-project input:focus { outline: none; border-color: var(--mc-blue); }
+.mc-project button { width: 46px; border: none; border-radius: 0 4px 4px 0; background: var(--mc-blue); display: flex; align-items: center; justify-content: center; }
+.mc-project button:hover { background: var(--mc-blue-dark); }
+.mc-project button svg { width: 18px; height: 18px; fill: #fff; }
+.mc-foot-spacer { flex: 1; }
+.mc-btn-pair { display: flex; border-radius: 4px; overflow: hidden; }
+.mc-btn-pair button { border: none; border-radius: 0; background: var(--mc-blue); width: 52px; height: 42px; display: flex; align-items: center; justify-content: center; }
+.mc-btn-pair button + button { border-left: 1px solid rgba(255, 255, 255, 0.2); }
+.mc-btn-pair button:hover { background: var(--mc-blue-dark); }
+.mc-btn-pair button:disabled { background: #8ba0e8; opacity: 1; }
+.mc-btn-pair svg { width: 20px; height: 20px; fill: #fff; }
+
+/* ---------- Blockly: toolbox like MakeCode ---------- */
+.blocklyToolbox, .blocklyToolboxDiv { background: #fff !important; padding-top: 0 !important; border-right: 1px solid #e0e0e0; }
+.mc-search { padding: 8px 10px 8px 12px; border-bottom: 1px solid #eee; position: relative; }
+.mc-search input { width: 100%; border: none; font-size: 16px; padding: 6px 30px 6px 4px; color: #333; font-family: var(--mc-font); background: transparent; }
+.mc-search input:focus { outline: none; }
+.mc-search svg { position: absolute; right: 12px; top: 13px; width: 20px; height: 20px; fill: #555; pointer-events: none; }
+div.blocklyTreeRow.mbCat { line-height: 22px; height: 40px; margin-bottom: 0; padding: 0 8px 0 0 !important; display: flex; align-items: center; border-bottom: 1px solid #ececec; }
+div.blocklyTreeRow.mbCat:not(.blocklyTreeSelected):hover { background-color: #e6e6e6; }
+.mbCat .blocklyTreeRowContentContainer { display: flex; align-items: center; height: 100%; padding-left: 10px; }
+.mbCat .blocklyTreeLabel { font-family: var(--mc-font) !important; font-weight: 300; font-size: 1.15rem; padding: 0 4px; white-space: nowrap; }
+.mbCat.blocklyTreeSelected .blocklyTreeLabel { color: #fff !important; }
+.mbMore { height: 38px !important; border-left-width: 12px !important; }
+.mbMore .blocklyTreeLabel { font-size: 1rem; }
+.mbCatIcon { width: 26px; height: 26px; display: inline-block; margin-right: 6px; flex: 0 0 26px; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: 22px 22px; mask-size: 22px 22px; }
+.blocklyTreeSelected .mbCatIcon { background-color: #fff !important; }
+.mbCatIcon.blocklyTreeIconOpen, .mbCatIcon.blocklyTreeIconClosed, .mbCatIcon { background-image: none !important; }
+.blocklyToolboxCategoryGroup .blocklyToolboxCategoryGroup { margin-left: 0; }
+div.blocklyTreeSeparator, .blocklyTreeSeparator { border-bottom: 1px solid #ccc !important; height: 0 !important; margin: 0 !important; width: 100%; }
+/* Flyout (block palette) */
+.blocklyFlyoutBackground { fill: #4b4949 !important; fill-opacity: 1 !important; }
+.mbFlyoutHeading .blocklyFlyoutLabelText { font-size: 1.5rem !important; fill: #fff !important; font-family: var(--mc-font) !important; font-weight: 400; }
+.mbFlyoutGroup .blocklyFlyoutLabelText { font-size: 1rem !important; fill: #fff !important; font-family: var(--mc-font) !important; font-weight: 500; text-decoration: underline dotted; text-underline-offset: 6px; }
+.blocklyFlyoutLabelText { fill: #fff !important; font-family: var(--mc-font) !important; }
+.blocklyFlyoutButton .blocklyFlyoutButtonBackground, .blocklyFlyoutButtonBackground { fill: transparent !important; stroke: #6633cc !important; stroke-width: 3px; }
+.blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground { fill: #6633cc !important; }
+.blocklyFlyoutButton .blocklyText { fill: #fff !important; font-family: var(--mc-font) !important; font-size: 15px !important; font-weight: 500; }
+.blocklyFlyoutButtonShadow { display: none; }
+/* Dropdowns and fields */
+.blocklyDropDownDiv { border-radius: 6px; }
+.mbIconGridMenu .blocklyMenu { display: grid !important; grid-template-columns: repeat(var(--cols, 5), 42px); gap: 4px; padding: 6px !important; max-height: 360px; }
+.mbIconGridMenu .blocklyMenuItem { min-width: 0 !important; padding: 6px !important; margin: 0 !important; border-radius: 6px; display: flex; justify-content: center; }
+.mbIconGridMenu .blocklyMenuItemCheckbox { display: none !important; }
+.mbIconGridMenu .blocklyMenuItem img { width: 28px; height: 28px; }
+.mbPresetMenu { position: fixed; z-index: 100001; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); padding: 4px 0; min-width: 120px; font-family: var(--mc-font); }
+.mbPreset { padding: 7px 14px; cursor: pointer; font-size: 14px; color: #333; }
+.mbPreset:hover { background: #eef2ff; }
+.mbPiano { padding: 8px; }
+.mbPianoKeys { position: relative; height: 110px; }
+.mbKey { position: absolute; top: 0; cursor: pointer; border-radius: 0 0 4px 4px; }
+.mbKey.white { height: 108px; background: #fff; border: 1px solid #555; box-sizing: border-box; }
+.mbKey.black { width: 16px; height: 66px; background: #222; z-index: 2; }
+.mbKey:hover { filter: brightness(0.85); }
+.mbKey.white:hover { background: #ffe9a8; filter: none; }
+.mbKey.on { background: #ffd43a !important; }
+.mbPianoLabel { text-align: center; color: #fff; font-weight: 600; margin-top: 6px; font-family: var(--mc-font); }
+.mbMelodyEditor { padding: 10px; font-family: var(--mc-font); }
+.mbMelRow { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.mbMelNote { width: 18px; font-size: 12px; color: #555; font-weight: 700; }
+.mbMelCell { width: 30px; height: 22px; border-radius: 4px; background: #eee; cursor: pointer; }
+.mbMelCell:hover { outline: 2px solid #999; }
+.mbMelActions { display: flex; justify-content: space-between; margin-top: 8px; }
+.mbMelActions button { border: none; border-radius: 4px; padding: 6px 14px; background: var(--mc-purple); color: #fff; font-weight: 600; }
+.mbLedCell { cursor: pointer; }
+.blocklyDisabled > .blocklyPath { fill-opacity: 0.45; }
+
+/* JavaScript view and data viewer */
+.mc-js { position: absolute; inset: 0; background: #fffffe; overflow: auto; }
+.mc-js-note { background: #fff8e1; color: #6b4e00; padding: 8px 14px; font-size: 13px; border-bottom: 1px solid #f0e2b0; }
+.mc-js pre { margin: 0; padding: 14px 18px; font: 15px/1.6 Menlo, Consolas, "Courier New", monospace; color: #000; }
+.mc-js .k { color: #0000ff; } .mc-js .s { color: #a31515; } .mc-js .n { color: #098658; } .mc-js .c { color: #008000; }
+.mc-data { position: absolute; inset: 0; background: #fff; display: flex; flex-direction: column; }
+.mc-data-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #ddd; }
+.mc-data canvas { width: 100%; height: 45%; display: block; border-bottom: 1px solid #eee; }
+.mc-data .console { flex: 1; overflow: auto; font: 13px/1.5 Menlo, Consolas, monospace; padding: 8px 12px; white-space: pre-wrap; background: #fafafa; }
+
+/* Quiz */
+.mc-quiz { position: absolute; inset: 0; overflow: auto; background: var(--mc-bg); padding: 24px; }
+.mc-quiz-card { max-width: 760px; margin: 0 auto; background: #fff; border-radius: 10px; padding: 20px 26px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+.mc-quiz h2 { margin-top: 0; }
+.mc-q { border-top: 1px solid #eee; padding: 14px 0; }
+.mc-q p { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.mc-q label { display: flex; gap: 10px; align-items: center; padding: 7px 10px; border-radius: 8px; border: 2px solid #e6e6e6; margin: 5px 0; cursor: pointer; font-size: 15px; }
+.mc-q label:hover { border-color: var(--mc-blue); }
+.mc-q label.picked { border-color: var(--mc-blue); background: #eef2ff; }
+.mc-q label.right { border-color: #107c10; background: #e9f6e9; }
+.mc-q label.wrong { border-color: #c4262e; background: #fdecee; }
+
+/* Home: challenge gallery */
+.mc-gallery h3 { margin: 16px 0 8px; }
+.mc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.mc-card { text-align: left; border: 1px solid #ddd; border-radius: 8px; padding: 0; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.mc-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); }
+.mc-card .top { height: 64px; display: flex; align-items: center; justify-content: center; font-size: 30px; background: #f2f4fb; }
+.mc-card .bot { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.mc-card b { font-size: 14px; }
+.mc-card span { font-size: 12px; color: #777; }
+.mc-card.locked { opacity: 0.55; cursor: not-allowed; }
+.mc-card.validated .top { background: #e3f4e3; }
+
+/* Welcome screen in MakeCode colours */
+body.mc .welcome { background: linear-gradient(135deg, #3454D1, #6633cc); }
+body.mc .brand .logo { background: var(--mc-blue); }
+body.mc button.primary { background: var(--mc-blue); border-color: var(--mc-blue); }
+body.mc .choice.guided:hover { border-color: var(--mc-blue); background: #f0f3ff; }
+body.mc .choices { grid-template-columns: 1fr 1fr; }
+body.mc.preview #mcHeader { background: #b36b00; }
+.toast { top: 66px; }
+@media (max-width: 1250px) { :root { --sim-w: 290px; } .mc-project input { width: 150px; } .mc-brand small { display: none; } }
+@media (max-width: 1050px) { .mc-toggle button { padding: 0 12px; } .mc-student { max-width: 120px; } }
+
+/* EV3 base styles that must not apply here */
+.blocklyToolboxDiv [id$='.label'], .blocklyToolbox [id$='.label'] { font-size: 1.15rem !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 300 !important; }
+.mbMore [id$='.label'] { font-size: 1rem !important; }
+.blocklyToolboxCategory { padding: 0 !important; }
+.blocklyTreeSelected, .blocklyToolboxSelected { border-radius: 0 !important; }
+.blocklyToolboxCategoryGroup { width: 200px; }
+/* compact list of challenges */
+.mc-steps { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px 0; }
+.mc-unit { gap: 3px; }
+.mc-unit-label { display: none; }
+.mc-dot { width: 22px; height: 22px; font-size: 10px; border-width: 2px; }
+
+/* views that replace the blocks (above the Blockly toolbox and flyout) */
+.mc-js, .mc-data, .mc-quiz { z-index: 80; }
+.blocklyFlyoutButton .blocklyText { font-size: 16px !important; }
+/* school laptops: the Blocks / JavaScript toggle moves next to the logo, the header items get smaller */
+@media (max-width: 1440px) {
+  .mc-toggle { position: static; transform: none; margin-left: 12px; }
+  .mc-toggle button { padding: 0 14px; }
+  #mcHeader .sync { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #mcHeader .help-me { padding: 6px 10px; font-size: 13px; }
+  .mc-student { max-width: 150px; }
+  .mc-icon { width: 42px; }
+}
+@media (max-width: 1100px) { .mc-brand small, .mc-brand .sep { display: none; } .mc-toggle button svg { display: none; } }

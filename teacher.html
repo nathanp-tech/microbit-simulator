@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>micro:bit Simulator: Teacher</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/makecode.css">
+  <style>
+    body { overflow: auto; display: block; }
+    .wrap { max-width: 1300px; margin: 0 auto; padding: 16px; }
+    .tabs2 { display: flex; gap: 4px; margin-bottom: 12px; }
+    .tabs2 button { font-weight: 600; }
+    .tabs2 button.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .panel-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    table.cls { width: 100%; border-collapse: collapse; background: #fff; }
+    table.cls th, table.cls td { padding: 7px 8px; border-bottom: 1px solid #eef1f4; text-align: left; vertical-align: middle; }
+    table.cls th { background: #f6f9fc; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    tr.waiting td { background: #fff7e0; }
+    .dots { display: flex; gap: 3px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); background: #fff; padding: 0; cursor: pointer; }
+    .dot:hover { transform: scale(1.35); box-shadow: 0 0 0 2px rgba(61, 140, 245, 0.35); }
+    .dot.open { border-color: var(--blue); }
+    .dot.passed { border-color: #e69500; background: #ffd27a; }
+    .dot.validated { border-color: var(--green); background: var(--green); }
+    .dot.locked { background: #f1f2f4; }
+    .dot.cur { box-shadow: 0 0 0 2px rgba(61, 140, 245, 0.5); }
+    .lvl { font-weight: 700; white-space: nowrap; }
+    .lvl.ok { color: var(--green); } .lvl.some { color: #d97706; } .lvl.help { color: var(--red); }
+    .st { white-space: nowrap; }
+    .st.wait { color: #b26b00; font-weight: 800; }
+    .st.off { color: var(--muted); }
+    .drop { display: block; border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; background: #fff; color: var(--muted); cursor: pointer; }
+    .drop.over { border-color: var(--blue); background: #eef5ff; }
+    .report h2 { margin-top: 0; }
+    .report .rep-student { border-top: 1px solid var(--border); padding: 12px 0; page-break-inside: avoid; }
+    .report ul { margin: 4px 0; }
+    .report table { font-size: 12px; }
+    .kpis { display: flex; gap: 10px; flex-wrap: wrap; }
+    .kpi { background: #f6f9fc; border-radius: 10px; padding: 8px 12px; }
+    .kpi b { display: block; font-size: 20px; color: var(--blue-dark); }
+    .modal-box { max-width: 1000px; }
+    .server-info { font-size: 13px; line-height: 1.6; }
+    .robot { font-size: 12px; color: var(--muted); margin: 6px 0; }
+    button.linklike { border: none; background: none; padding: 0; color: var(--blue-dark); font-weight: 600; text-decoration: underline; cursor: pointer; }
+    .watch { display: grid; grid-template-columns: 1fr 380px; gap: 12px; }
+    .watch-quiz { position: absolute; inset: 0; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; background: #fff; }
+    .wq-opt { padding: 3px 8px; border-radius: 6px; margin: 2px 0; color: #666; }
+    .wq-opt.right { color: #107c10; font-weight: 600; }
+    .wq-opt.picked-ok { background: #e9f6e9; }
+    .wq-opt.picked-ko { background: #fdecee; color: #a4262c; font-weight: 600; }
+    #watchBoard .sim-board-wrap { max-width: 360px; }
+    #watchWs { height: 62vh; min-height: 380px; border: 1px solid var(--border); border-radius: 10px; }
+    #watchCanvas { width: 430px; height: 300px; display: block; border-radius: 10px; background: #2b3036; }
+    .watch-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .live-dot { color: var(--green); font-weight: 700; font-size: 12px; }
+    .watch-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .watch-side .log { height: auto; max-height: 140px; }
+    .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 10px; }
+    .settings input[type=number] { width: 70px; }
+    button.danger { color: var(--red); border-color: #f3c2c4; }
+    button.danger:hover { background: #fff1f1; }
+    .btnlike { cursor: pointer; border: 1px solid var(--border); border-radius: 8px; padding: 5px 11px; background: #fff; }
+    .btnlike:hover { background: #f3f5f7; }
+    #mgRows input[type=text] { width: 130px; }
+    #mgRows select { max-width: 170px; }
+    .share { display: flex; gap: 18px; align-items: center; }
+    .share-qr svg { width: 120px; height: 120px; display: block; }
+    .share-url { font-size: 22px; font-weight: 800; color: var(--blue-dark); word-break: break-all; margin: 4px 0 8px; }
+    .big-share { text-align: center; }
+    .big-share svg { width: min(60vh, 520px); height: min(60vh, 520px); }
+    .big-share .share-url { font-size: 34px; }
+    .server-info code { background: #f1f2f4; padding: 2px 6px; border-radius: 6px; font-size: 14px; }
+    @media print {
+      #topbar, .tabs2, .no-print, #liveTab { display: none !important; }
+      .wrap { max-width: none; padding: 0; }
+      .panel-card { border: none; }
+    }
+  </style>
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand"><span class="logo" style="background:#3454D1">micro:bit</span><span>Teacher dashboard</span></div>
+    <div class="spacer"></div>
+    <span id="liveStatus" class="sync"></span>
+    <a href="index.html?preview=1" target="_blank" title="The student app with every challenge open: try the challenges and edit freely (nothing is saved for students)">🎓 Student view</a>
+    <a href="index.html" target="_blank">Open the student app →</a>
+    <button id="btnLogout" class="link" title="Forget the teacher password on this computer">Log out</button>
+  </header>
+  <div class="wrap">
+    <div class="tabs2 no-print">
+      <button data-tab="liveTab" class="active">🟢 Live class</button>
+      <button data-tab="filesTab">📁 Report from saved files</button>
+      <button data-tab="manageTab">⚙️ Manage</button>
+    </div>
+
+    <section id="liveTab">
+      <div class="panel-card" id="loginCard">
+        <div id="codeRow" class="actions" hidden>
+          <b>Teacher code</b>
+          <input id="tcode" inputmode="numeric" autocomplete="off" style="width:120px">
+          <button class="primary" id="btnCode">Open the dashboard</button>
+          <span id="codeMsg" class="muted">The code is shown in the server window on the teacher's computer.</span>
+        </div>
+        <div id="serverInfo" class="server-info"></div>
+      </div>
+      <div id="liveArea" hidden>
+        <div class="panel-card share" id="shareBox" hidden>
+          <div id="shareQr" class="share-qr"></div>
+          <div class="share-text">
+            <div class="muted">Students open this link (any network, any computer) · class <select id="shareClass"></select></div>
+            <div class="share-url" id="shareUrl"></div>
+            <div id="shareCode" class="share-code"></div>
+            <div class="actions"><button id="btnCopy">📋 Copy link</button><button id="btnShow" class="primary">📺 Show to the class</button></div>
+          </div>
+        </div>
+        <div class="panel-card">
+          <div class="actions">
+            <span id="classKpis" class="kpis"></span>
+            <span class="spacer" style="flex:1"></span>
+            <label>Class <select id="liveClass"><option value="">All classes</option></select></label>
+            <button id="btnExams">📝 Exams &amp; results</button>
+            <button id="btnReportLive" class="primary">📄 Difficulty report</button>
+            <button id="btnCsvLive">📊 CSV</button>
+          </div>
+        </div>
+        <div id="helpQueue" class="panel-card help-queue" hidden></div>
+        <table class="cls">
+          <thead><tr><th>Student</th><th>Mode</th><th>Progress</th><th>Current challenge</th><th>Time on it</th><th>Runs</th><th>Best check</th><th>Status</th><th></th></tr></thead>
+          <tbody id="liveRows"></tbody>
+        </table>
+        <p class="muted" id="serverInfo2"></p>
+      </div>
+    </section>
+
+    <section id="filesTab" hidden>
+      <div class="panel-card">
+        <p>Drop the work files saved by your students (<code>…_microbit-work.json</code>) to see their progress and generate the difficulty report. This works without the class server.</p>
+        <label class="drop" id="drop"><input type="file" id="files" multiple accept=".json" hidden>📥 Drop work files here, or <u>click to choose</u></label>
+        <div class="actions" style="margin-top:10px"><button id="btnReportFiles" class="primary">📄 Difficulty report</button><button id="btnCsvFiles">📊 CSV</button><button id="btnClearFiles">🗑 Clear</button><span id="filesCount" class="muted"></span></div>
+      </div>
+      <table class="cls">
+        <thead><tr><th>Student</th><th>Mode</th><th>Progress</th><th>Current challenge</th><th>Time on it</th><th>Runs</th><th>Best check</th><th>Last saved</th><th></th></tr></thead>
+        <tbody id="fileRows"></tbody>
+      </table>
+    </section>
+
+    <section id="manageTab" hidden>
+      <div class="panel-card" id="manageLocked" hidden><p>⚠️ Managing students needs the class server (start <code>start.command</code>) and the teacher code.</p></div>
+      <div id="manageArea">
+        <div class="panel-card">
+          <h3 style="margin-top:0">Class settings</h3>
+          <div class="settings">
+            <label>Pass score for a challenge <input id="setPass" type="number" min="0" max="100" step="5"> %</label>
+            <label>Remind students to download their work after <input id="setReminder" type="number" min="1" max="240"> min <span class="muted">(only when they are offline)</span></label>
+            <label><input id="setGuided" type="checkbox"> Allow the <b>challenges</b></label>
+            <label><input id="setFree" type="checkbox"> Allow <b>free programming</b></label>
+          </div>
+          <div class="actions"><button class="primary" id="btnSaveSettings">Save settings</button><span id="settingsMsg" class="muted"></span></div>
+        </div>
+        <div class="panel-card">
+          <div class="actions"><h3 style="margin:0">Class lists</h3><span class="muted" id="rosterSource"></span><span class="spacer" style="flex:1"></span>
+            <button id="rosterAddClass">+ Add a class</button><button id="rosterPasteBtn">📋 Paste from Excel</button><button class="primary" id="rosterSave">Save the class lists</button></div>
+          <p class="muted" style="margin:6px 0">Students choose their class, then their name, on the welcome page. One name per line. A student is identified by class + name: renaming here does not move existing work (use "First name" below).</p>
+          <div id="rosterPaste" hidden><textarea id="rosterPasteText" rows="6" placeholder="Paste two columns from Excel: class, then name. Example:&#10;4A	Frederik&#10;4A	Amiri&#10;4B	Sean"></textarea>
+            <div class="actions"><label><input type="checkbox" id="rosterPasteReplace"> Replace the classes found in the pasted list</label><button class="primary" id="rosterPasteGo">Add to the lists</button><button id="rosterPasteCancel">Cancel</button></div></div>
+          <div id="rosterEditor" class="roster-editor"></div>
+          <span id="rosterMsg" class="muted"></span>
+        </div>
+        <div class="panel-card">
+          <div class="actions">
+            <h3 style="margin:0">Students</h3>
+            <label>Class <select id="mgClass"><option value="">All</option></select></label>
+            <span class="spacer" style="flex:1"></span>
+            <button id="mgSelAll" title="Select every student shown">☑ Select all</button><button id="mgSelNone">☐ None</button>
+            <span class="muted" id="mgSelCount">0 selected</span>
+            <select id="mgClassTo"></select><button id="mgClassSel">🏫 Set class</button>
+            <select id="mgUnlockTo"></select><button id="mgUnlockSel">🔓 Unlock up to</button>
+            <button id="mgResetSel">↺ Reset data</button>
+            <button id="mgDeleteSel" class="danger">🗑 Delete</button>
+          </div>
+          <table class="cls" style="margin-top:8px">
+            <thead><tr><th><input type="checkbox" id="mgAll"></th><th>First name</th><th>Class</th><th>Mode</th><th>Progress</th><th>Last activity</th><th></th></tr></thead>
+            <tbody id="mgRows"></tbody>
+          </table>
+        </div>
+        <div class="panel-card">
+          <h3 style="margin-top:0">Backup and reset</h3>
+          <div class="actions"><b>Automatic daily backups</b><span class="muted">(kept 30 days)</span><span class="spacer" style="flex:1"></span><button id="btnBackupNow">💾 Make a backup now</button></div>
+          <div id="backupList" class="backup-list"></div>
+          <div class="actions">
+            <button id="btnBackup">💾 Download a backup of all work</button>
+            <label class="btnlike">📥 Restore from a backup or work files<input type="file" id="restoreFiles" multiple accept=".json" hidden></label>
+            <span class="spacer" style="flex:1"></span>
+            <button id="btnResetAll" class="danger">⚠️ Reset everything (new class / new year)</button>
+            <button id="btnWipe" class="danger" title="Delete everything in the database except the class lists, the names and the settings">🧹 Empty the database</button>
+          </div>
+          <p class="muted" id="mgMsg">Before any reset or deletion, a copy of all data is kept for 180 days.</p>
+        </div>
+        <div class="panel-card">
+          <h3 style="margin-top:0">Database usage</h3>
+          <div id="dbStats"></div>
+        </div>
+      </div>
+    </section>
+
+    <div id="report" class="report panel-card" hidden></div>
+  </div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="lib/blockly/blockly_compressed.js"></script>
+  <script src="lib/blockly/msg/en.js"></script>
+  <script src="js/mbdata.js"></script>
+  <script src="js/fields.js"></script>
+  <script src="js/blocks.js"></script>
+  <script src="js/generator.js"></script>
+  <script src="js/runtime.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/challenges.js"></script>
+  <script src="js/evaluator.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/roster.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="lib/qrcode/qrcode.js"></script>
+  <script src="js/teacher.js"></script>
+  <script src="js/teacher-classroom.js"></script>
+</body>
+</html>

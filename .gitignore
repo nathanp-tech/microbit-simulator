@@ -1,0 +1,7 @@
+# Student data and local tools never go to GitHub
+data/
+tools/
+*.tmp
+.DS_Store
+.vercel
+__pycache__/

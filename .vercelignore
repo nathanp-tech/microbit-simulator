@@ -1,0 +1,9 @@
+# Only the app (static files) and api/ are deployed
+data/
+tools/
+tests/
+server.py
+start.command
+README.md
+*.tmp
+.DS_Store

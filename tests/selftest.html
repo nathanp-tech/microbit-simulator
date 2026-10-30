@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>micro:bit Simulator: self-test</title>
+  <style>body { font: 14px/1.5 Menlo, monospace; padding: 16px; } .ok { color: #107c10; } .ko { color: #c4262e; font-weight: bold; } pre { white-space: pre-wrap; }</style>
+</head>
+<body>
+  <h1>Self-test</h1>
+  <p>Every reference solution must score 100 %, an empty program 0 %, and every wrong program must fail its criterion. Open it through the class server (<code>python3 server.py</code>).</p>
+  <pre id="out">Running…</pre>
+  <h2>Answer key (api/_solutions.json)</h2>
+  <pre id="json"></pre>
+  <script src="../lib/blockly/blockly_compressed.js"></script>
+  <script src="../lib/blockly/msg/en.js"></script>
+  <script src="../js/mbdata.js"></script>
+  <script src="../js/fields.js"></script>
+  <script src="../js/blocks.js"></script>
+  <script src="../js/generator.js"></script>
+  <script src="../js/runtime.js"></script>
+  <script src="../js/challenges.js"></script>
+  <script src="../js/evaluator.js"></script>
+  <script src="solutions_src.js"></script>
+  <script src="engine.js"></script>
+  <script>
+    const lines = [];
+    let failures = 0;
+    const say = (ok, msg) => { lines.push(`<span class="${ok ? 'ok' : 'ko'}">${ok ? '✔' : '✖'} ${msg}</span>`); if (!ok) failures++; };
+    const EMPTY_PROG = { blocks: { languageVersion: 0, blocks: [{ type: 'basic_on_start', x: 0, y: 0 }, { type: 'basic_forever', x: 300, y: 0 }] } };
+    const t0 = performance.now();
+    for (const ch of CHALLENGES) {
+      if (ch.quiz) {
+        const r = gradeQuiz(ch, ch.questions.map((q) => q.answer));
+        say(r.score === 100, `${ch.id}: right answers → ${r.score} %`);
+        const w = gradeQuiz(ch, ch.questions.map((q) => (q.answer + 1) % q.options.length));
+        say(w.score === 0, `${ch.id}: wrong answers → ${w.score} %`);
+        continue;
+      }
+      const sols = SOLUTIONS[ch.id];
+      if (!sols) { say(false, `${ch.id}: no reference solution`); continue; }
+      for (const s of sols) {
+        const t = performance.now();
+        const r = evaluateChallenge(ch, programFromState(s.program));
+        say(r.score === 100, `${ch.id} · ${s.title}: ${r.score} % (${Math.round(performance.now() - t)} ms)${r.score < 100 ? ' · ' + r.criteria.filter((c) => !c.ok).map((c) => c.label + ' ' + c.points + '/' + c.max).join(' ; ') : ''}`);
+      }
+      const e = evaluateChallenge(ch, programFromState(EMPTY_PROG));
+      say(e.score === 0, `${ch.id} · empty program: ${e.score} %`);
+    }
+    for (const [id, title, program, k] of WRONG) {
+      const ch = CHALLENGES.find((c) => c.id === id);
+      const r = evaluateChallenge(ch, programFromState(program));
+      if (!r.criteria[k]) { say(false, `${id} · ✗ ${title}: ${r.criteria[0].label}`); continue; }
+      say(!r.criteria[k].ok, `${id} · ✗ ${title}: criterion "${r.criteria[k].label}" ${r.criteria[k].points}/${r.criteria[k].max} (total ${r.score} %)`);
+    }
+    for (const [name, fn] of ENGINE_TESTS) {
+      try { const r = fn(); say(r === true, `engine · ${name}${r === true ? '' : ': ' + r}`); } catch (err) { say(false, `engine · ${name}: ${err.message}`); }
+    }
+    lines.unshift(`<b>${failures ? failures + ' FAILURE(S)' : 'ALL OK'}</b> in ${Math.round(performance.now() - t0)} ms`);
+    document.getElementById('out').innerHTML = lines.join('\n');
+    document.getElementById('json').textContent = JSON.stringify(SOLUTIONS);
+    document.title = failures ? 'FAIL ' + failures : 'ALL OK';
+  </script>
+</body>
+</html>
