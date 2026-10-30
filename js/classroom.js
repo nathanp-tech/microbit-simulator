@@ -214,14 +214,16 @@ function renderExam() {
   }).join('');
   $('stepper').innerHTML = `<div class="mc-unit on"><span class="mc-unit-label">📝 ${esc(e.title)}</span>${$('stepper').innerHTML}</div>`;
   $('challengeTitle').textContent = `📝 ${chTitle(ch.id)}`;
-  $('challengeMeta').textContent = `${k + 1} / ${e.challenges.length}`;
+  $('challengeMeta').textContent = `📝 Exam · ${k + 1} of ${e.challenges.length}`;
+  $('btnAllCh').hidden = true;
+  $('btnHint').textContent = '💡 Need a hint?';
   $('btnSolution').hidden = true;
-  $('challengeDesc').innerHTML = `${ch.description}<span class="skills">${esc(ch.skills)}</span>`;
+  $('challengeDesc').innerHTML = ch.description;
   const hints = e.hints ? ch.hints || [] : [];
   $('hintBox').innerHTML = hints.slice(0, slot.hints).map((h, i) => `<div class="hint-card">💡 <b>Hint ${i + 1}:</b> ${esc(h)}</div>`).join('');
   $('btnHint').hidden = slot.hints >= hints.length;
   $('btnHint').textContent = `💡 Hint (${slot.hints + 1}/${hints.length})`;
-  $('btnEvaluate').hidden = CR.examOver;
+  $('btnEvaluate').hidden = CR.examOver || !!ch.quiz;
   $('validateBox').innerHTML = `<div class="exam-best">${slot.best !== null ? `Your best score for this challenge: <b>${slot.best} %</b> (${slot.checks} check${slot.checks > 1 ? 's' : ''}).` : 'Not checked yet.'}
     <span class="muted">Only your best <b>Check my solution</b> counts. You can keep improving until the end.</span></div>`;
   applyNotes();

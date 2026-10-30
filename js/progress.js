@@ -55,6 +55,11 @@ const Progress = {
     this.data = obj;
     // Older files: challenges that were waiting for the teacher are now passed.
     for (const c of CHALLENGES) if (obj.challenges[c.id].status === 'passed') this.validate(c.id, 'check');
+    // the list of challenges can change: the first one, and every one after a passed one, are open
+    CHALLENGES.forEach((c, i) => {
+      const e = obj.challenges[c.id];
+      if (e.status === 'locked' && (i === 0 || obj.challenges[CHALLENGES[i - 1].id].status === 'validated')) e.status = 'open';
+    });
     if (!CHALLENGES.some((c) => c.id === obj.current)) obj.current = CHALLENGES[0].id;
     this.data = obj;
     this.log('resume', null, obj.mode);

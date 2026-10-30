@@ -43,7 +43,6 @@ body.mc { font-family: var(--mc-font); background: var(--mc-bg); font-size: 14px
 #editorArea { flex: 1; position: relative; min-width: 0; }
 #blocklyDiv { position: absolute; inset: 0; }
 .mc-boards { display: flex; gap: 6px; padding: 14px 12px 4px; justify-content: center; }
-.mc-boards.two .sim-board-wrap { flex: 1 1 0; }
 .sim-board-wrap { flex: 0 1 100%; max-width: 100%; transition: transform 0.05s; }
 .sim-board-wrap svg.sim { width: 100%; height: auto; display: block; }
 .sim-text { font-family: "Lucida Console", Monaco, monospace; font-size: 25px; fill: #fff; pointer-events: none; }
@@ -249,3 +248,55 @@ body.mc.preview #mcHeader { background: #b36b00; }
   .mc-icon { width: 42px; }
 }
 @media (max-width: 1100px) { .mc-brand small, .mc-brand .sep { display: none; } .mc-toggle button svg { display: none; } }
+
+/* ---------- Challenge card: the mission first, few buttons ---------- */
+.mc-tut { border-bottom: none; padding: 12px 12px 4px; background: #f4f6fb; }
+.mc-tut-head { display: block; border-radius: 12px 12px 0 0; padding: 12px 14px 14px; background: linear-gradient(135deg, #3454D1, #6633cc); }
+.mc-tut[data-unit="u2"] .mc-tut-head { background: linear-gradient(135deg, #b4009e, #6633cc); }
+.mc-tut[data-unit="u3"] .mc-tut-head { background: linear-gradient(135deg, #0f8a8c, #3454D1); }
+.mc-tut[data-unit="u4"] .mc-tut-head { background: linear-gradient(135deg, #d83b01, #b4009e); }
+.mc-tut-kicker { display: flex; align-items: center; gap: 8px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.6px; opacity: 0.9; font-weight: 600; }
+.mc-tut-link { margin-left: auto; border: 1px solid rgba(255, 255, 255, 0.55); background: transparent; color: #fff; border-radius: 12px; padding: 2px 10px; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.mc-tut-link:hover { background: rgba(255, 255, 255, 0.18); }
+.mc-tut-head h2 { font-size: 21px; font-weight: 700; margin-top: 6px; line-height: 1.2; }
+.mc-tut .mc-steps { background: #fff; padding: 8px 14px 0; }
+.mc-steps:empty { display: none; }
+.mc-tut-body { background: #fff; border-radius: 0 0 12px 12px; padding: 14px; gap: 10px; box-shadow: 0 2px 8px rgba(30, 50, 110, 0.08); }
+.mc-mission-label { font-size: 12px; font-weight: 700; color: #3454D1; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+.mc-tut[data-unit="u2"] .mc-mission-label { color: #b4009e; }
+.mc-tut[data-unit="u3"] .mc-mission-label { color: #0f8a8c; }
+.mc-tut[data-unit="u4"] .mc-mission-label { color: #d83b01; }
+.mc-mission .desc { font-size: 15.5px; line-height: 1.55; color: #222; }
+.mc-mission .desc b { color: #000; }
+.mc-hint-link { align-self: flex-start; border: none; background: none; color: #7a5a00; font-weight: 600; font-size: 13.5px; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.mc-hint-link:hover { background: none; color: #4d3800; }
+.mc-tut .hint-card { font-size: 13.5px; line-height: 1.45; border-radius: 10px; }
+.mc-check { width: 100%; border: none; border-radius: 10px; background: #107c10; color: #fff; font-size: 16px; font-weight: 700; padding: 12px; box-shadow: 0 3px 0 #0b5a0b; }
+.mc-check:hover { background: #0e6e0e; }
+.mc-check:active { transform: translateY(2px); box-shadow: 0 1px 0 #0b5a0b; }
+.mc-check.purple { background: #6633cc; box-shadow: 0 3px 0 #4a2496; font-size: 14.5px; }
+.mc-check.purple:hover { background: #5C2EB8; }
+.mc-check:disabled { opacity: 0.6; }
+.mc-done { background: #e9f6e9; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.mc-done-title { font-size: 17px; font-weight: 800; color: #0b5a0b; }
+.mc-best { font-size: 13px; color: #555; text-align: center; }
+#mcHeader .sync { font-size: 11px; }
+.mc-tut-kicker, .mc-tut-link { white-space: nowrap; }
+
+/* ---------- Gestures: bar under the board, the board moves ---------- */
+.sim-board-col { flex: 0 1 100%; max-width: 100%; position: relative; display: flex; flex-direction: column; align-items: stretch; }
+.mc-boards.two .sim-board-col { flex: 1 1 0; }
+.sim-board-wrap { transition: transform 0.18s ease-out, filter 0.18s; }
+.sim-board-wrap[data-pose="ScreenDown"] { filter: brightness(0.45); }
+.sim-shaking { animation: simShake 0.45s ease-in-out; }
+.sim-board-wrap[data-pose="FreeFall"].sim-shaking { animation: simFall 0.6s ease-in; }
+@keyframes simShake { 0%, 100% { translate: 0 0; rotate: 0deg; } 15% { translate: -14px 0; rotate: -6deg; } 35% { translate: 12px 0; rotate: 5deg; } 55% { translate: -10px 0; rotate: -4deg; } 75% { translate: 7px 0; rotate: 3deg; } }
+@keyframes simFall { 0% { translate: 0 0; } 70% { translate: 0 40px; scale: 0.9; } 100% { translate: 0 0; } }
+.sim-gestures { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; }
+.sim-gestures-title { width: 100%; text-align: center; font-size: 11px; font-weight: 700; color: #777; text-transform: uppercase; letter-spacing: 0.6px; }
+.sim-gesture { border: 2px solid #d6dbe8; background: #fff; border-radius: 18px; padding: 5px 11px 5px 8px; font-size: 13px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 5px; user-select: none; touch-action: none; }
+.sim-gesture span { font-size: 15px; }
+.sim-gesture:hover { border-color: #3454D1; background: #f0f3ff; }
+.sim-gesture.down { background: #3454D1; border-color: #3454D1; color: #fff; }
+.sim-pose { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(0.9); background: rgba(52, 84, 209, 0.92); color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 16px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.15s; white-space: nowrap; }
+.sim-pose.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }

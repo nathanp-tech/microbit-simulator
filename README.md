@@ -21,29 +21,21 @@ A web app that looks and works like **MakeCode for micro:bit** (makecode.microbi
 
 Not available: download to a real micro:bit, extensions, editing in JavaScript / Python, the debugger.
 
-## The challenges (Class 5, Term 2)
+## The assessment (Class 5, Term 2)
 
-| # | Unit | Challenge | Lesson | Checked automatically |
-|---|---|---|---|---|
-| 1 | 1 Introduction | Name tag | L1 | name scrolls at start, then a picture |
-| 2 | 1 | Small animation | L1 ext. | two pictures, repeating, visible long enough |
-| 3 | 1 | Mood display | L2 | A happy, B sad, A+B another reaction |
-| 4 | 1 | Quiz: inputs and outputs | Unit 1 | 6 questions |
-| 5 | 2 Physical inputs | Gesture detective | L3 | 3 gestures, 3 different pictures |
-| 6 | 2 | Electronic dice | L3 | 60 shakes: always 1 to 6, every face |
-| 7 | 2 | Rock Paper Scissors | L4 | 3 pictures at random, variable + if / else if |
-| 8 | 2 | Keep the score | L4 ext. | A adds 1, B shows the score |
-| 9 | 2 | Quiz: movement and random | Unit 2 | 6 questions |
-| 10 | 3 Sensors & variables | Sensor station | L5 | A temperature, B light, A+B compass (two values each) |
-| 11 | 3 | Live thermometer | L5 ext. | updates by itself, unit "C" |
-| 12 | 3 | Step counter | L6 | 0 at start, +1 per shake, B resets |
-| 13 | 3 | Progress bar | L6 ext. | plot bar graph grows with the steps |
-| 14 | 3 | Quiz: sensors and variables | Unit 3 | 6 questions |
-| 15 | 4 Conditions | Night light | L7 A | dark → all LEDs on, light → off, again and again |
-| 16 | 4 | Hot / cold detector | L7 B | HOT above 25 °C, COLD below 15 °C, else OK |
-| 17 | 4 | Reaction game | L8 | random wait, heart, reaction time, "too early" sad face |
-| 18 | 4 | Best reaction time | L8 ext. | best time kept, A+B shows it |
-| 19 | 4 | Mini-quiz Units 1-4 | L8 | 8 questions |
+Made to fit in one 40-minute lesson: one challenge per key skill of the lesson plans, then a short quiz.
+
+| # | Unit | Challenge | Lesson | Checked automatically | ~Time |
+|---|---|---|---|---|---|
+| 1 | 1 Introduction | Mood display | L2 | A happy, B sad, A+B another reaction | 4 min |
+| 2 | 2 Physical inputs | Electronic dice | L3 | 60 shakes: always 1 to 6, every face | 4 min |
+| 3 | 2 | Rock Paper Scissors | L4 | 3 pictures at random, variable + if / else if | 7 min |
+| 4 | 3 Sensors & variables | Step counter | L6 | 0 at start, +1 per shake, B resets | 6 min |
+| 5 | 4 Conditions | Night light | L7 | dark → all LEDs on, light → off, again and again | 5 min |
+| 6 | 4 | Reaction game | L8 | random wait, heart, reaction time, "too early" sad face | 8 min |
+| 7 | 1-4 | Quiz | Units 1-4 | 6 questions | 4 min |
+
+The other challenges written for the units (name tag, animation, gestures, score, sensor station, thermometer, progress bar, hot / cold, best time, one quiz per unit) were taken out to keep the lesson short; their reference solutions are still in `tests/solutions_src.js`.
 
 How a check works: the program runs on a fresh simulated micro:bit, in virtual time (a check takes a fraction of a second). A test script presses the buttons, shakes the board, changes the light, the temperature or the heading, then looks at what was shown (numbers, texts, icons, LED patterns). Each criterion gives points; the score is the share of points. Random numbers use fixed seeds, so a check always gives the same score. Quizzes: the wrong answers are shown in red, the right answer is not given.
 

@@ -37,6 +37,17 @@ const MBV = {
   labelB: 'M449.1,135.8h5.9c3.9,0,4.7,2.4,4.7,3.9c0,1.8-1.4,2.9-2.5,3.2c0.9,0,2.6,1.1,2.6,3.3c0,1.5-0.8,4-4.7,4h-6V135.8zM454.4,141.7c1.6,0,2-1,2-1.7c0-0.6-0.3-1.7-2-1.7h-2v3.4H454.4z M452.4,144.1v3.5h2.1c1.6,0,2-1,2-1.8c0-0.7-0.4-1.8-2-1.8H452.4z',
   colors: { display: '#111', pin: '#D4AF37', pinTouched: '#FFA500', ledOn: '#ff7f7f', ledOff: '#202020', buttonOuter: '#979797', buttonUp: '#111', buttonDown: '#FFA500', virtualOuter: '#333', virtualUp: '#fff' },
 };
+// Gestures: what the board looks like while a gesture is held, and its icon
+const GESTURE_MOVES = { Shake: 'move', FreeFall: 'move', ThreeG: 'move', SixG: 'move', EightG: 'move' };
+const GESTURE_ICONS = { Shake: '〰️', LogoUp: '⬆️', LogoDown: '⬇️', ScreenUp: '🔼', ScreenDown: '🔽', TiltLeft: '↩️', TiltRight: '↪️', FreeFall: '🪂', ThreeG: '💥', SixG: '💥', EightG: '💥' };
+const GESTURE_POSES = {
+  LogoUp: 'perspective(30em) rotateX(28deg) scale(0.95)',
+  LogoDown: 'perspective(30em) rotateX(-28deg) scale(0.95)',
+  TiltLeft: 'perspective(30em) rotateY(-28deg) scale(0.95)',
+  TiltRight: 'perspective(30em) rotateY(28deg) scale(0.95)',
+  ScreenUp: 'perspective(30em) scale(1)',
+  ScreenDown: 'perspective(30em) rotateX(155deg) scale(0.9)',
+};
 // Accent colours of the board (one is picked at random, like MakeCode)
 const MB_ACCENTS = ['#3ADCFE', '#3AFFB3', '#FF3A54'];
 
@@ -56,9 +67,18 @@ class BoardView {
 
   build(container) {
     const C = MBV.colors;
+    this.col = document.createElement('div');
+    this.col.className = 'sim-board-col';
+    container.appendChild(this.col);
     this.wrap = document.createElement('div');
     this.wrap.className = 'sim-board-wrap';
-    container.appendChild(this.wrap);
+    this.col.appendChild(this.wrap);
+    // the gestures used by the program: hold a button to hold the micro:bit in that position
+    this.gestureBar = document.createElement('div');
+    this.gestureBar.className = 'sim-gestures';
+    this.gestureBar.hidden = true;
+    this.col.appendChild(this.gestureBar);
+    this.wrap.addEventListener('animationend', () => { this.wrap.classList.remove('sim-shaking'); if (!this.pose) delete this.wrap.dataset.pose; });
     this.svg = svgEl('svg', { viewBox: `0 0 ${MBV.W} ${MBV.H}`, class: 'sim', role: 'application' });
     this.wrap.appendChild(this.svg);
     const defs = svgEl('defs', {}, this.svg);
@@ -215,16 +235,42 @@ class BoardView {
   }
 
   tiltFromMouse(e) {
-    if (!this.features.accel || this.dragging) return;
+    if (!this.features.accel || this.dragging || this.pose) return;
     const mb = this.getMb();
     if (!mb) return;
     const r = this.svg.getBoundingClientRect();
-    const x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
-    const y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
+    // a bit stronger than the position of the mouse: tilt left / right, logo up / down are easy to reach
+    const x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2.8));
+    const y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2.8));
     const ax = Math.round(x * 1023), ay = Math.round(y * 1023);
     mb.setAccel(ax, ay, -Math.round(Math.sqrt(Math.max(0, 1023 * 1023 - ax * ax - ay * ay))));
   }
-  resetTilt() { const mb = this.getMb(); if (mb && this.features.accel) mb.setAccel(0, 0, -1023); }
+  resetTilt() { const mb = this.getMb(); if (mb && this.features.accel && !this.pose) mb.setAccel(0, 0, -1023); }
+
+  // A gesture from the gesture bar or the SHAKE circle: the board moves, the micro:bit feels it
+  gesture(g, down) {
+    const mb = this.getMb();
+    const moving = GESTURE_MOVES[g] === 'move';
+    if (down) {
+      this.pose = g;
+      this.wrap.dataset.pose = g;
+      this.wrap.classList.remove('sim-shaking');
+      if (moving) { void this.wrap.offsetWidth; this.wrap.classList.add('sim-shaking'); }
+      if (mb) mb.doGesture(g);
+      this.showPose(g);
+    } else if (this.pose === g) {
+      this.pose = null;
+      if (!moving || !this.wrap.classList.contains('sim-shaking')) delete this.wrap.dataset.pose; // a shake ends its animation first
+      // back flat on the table (a real micro:bit sends "screen up")
+      if (mb && !moving) mb.setAccel(0, 0, -1023);
+      this.showPose(null);
+    }
+  }
+  showPose(g) {
+    if (!this.poseLabel) { this.poseLabel = document.createElement('div'); this.poseLabel.className = 'sim-pose'; this.col.appendChild(this.poseLabel); }
+    this.poseLabel.textContent = g ? `${GESTURE_ICONS[g] || '✋'} ${gestureLabel(g)}` : '';
+    this.poseLabel.classList.toggle('on', !!g);
+  }
 
   // The controls the program needs (light, thermometer, A+B…), like MakeCode
   setFeatures(f) {
@@ -251,17 +297,21 @@ class BoardView {
         if (mb) mb.heading = ((Math.floor(Math.atan2(y - 75, x - 258) * 180 / Math.PI) + 90) % 360 + 360) % 360;
       });
     }
-    // SHAKE, and a button for each other gesture used by the program
+    // SHAKE on the board (like MakeCode), and the gesture bar under it
     this.gestureG.innerHTML = '';
-    const gestures = (f.gestures || []).slice().sort((a, b) => (a === 'Shake' ? -1 : b === 'Shake' ? 1 : 0));
-    gestures.forEach((g, i) => {
-      const y = 115 + i * 30;
+    const gestures = GESTURES.map(([g]) => g).filter((g) => (f.gestures || []).includes(g));
+    if (gestures.includes('Shake')) {
       const grp = svgEl('g', { class: 'sim-button-group' }, this.gestureG);
-      const c = svgEl('circle', { cx: 404, cy: y, r: 12, fill: MBV.colors.virtualUp, class: 'sim-shake' }, grp);
-      const t = svgEl('text', { x: 420, y: y + 7, class: 'sim-text-small' }, grp);
-      t.textContent = gestureLabel(g).toUpperCase();
-      if (g !== 'Shake') t.setAttribute('font-size', '13px');
-      this.pressable(grp, () => { c.setAttribute('fill', MBV.colors.buttonDown); const mb = this.getMb(); if (mb) mb.doGesture(g); }, () => { c.setAttribute('fill', MBV.colors.virtualUp); });
+      const c = svgEl('circle', { cx: 404, cy: 115, r: 12, fill: MBV.colors.virtualUp, class: 'sim-shake' }, grp);
+      const t = svgEl('text', { x: 420, y: 122, class: 'sim-text-small' }, grp);
+      t.textContent = 'SHAKE';
+      this.pressable(grp, () => { c.setAttribute('fill', MBV.colors.buttonDown); this.gesture('Shake', true); }, () => { c.setAttribute('fill', MBV.colors.virtualUp); this.gesture('Shake', false); });
+    }
+    this.gestureBar.hidden = !gestures.length;
+    this.gestureBar.innerHTML = gestures.length ? '<span class="sim-gestures-title">Move the micro:bit</span>' + gestures.map((g) => `<button class="sim-gesture" data-g="${g}" title="${GESTURE_MOVES[g] === 'move' ? 'Click' : 'Hold the button'} to ${gestureLabel(g)} the micro:bit"><span>${GESTURE_ICONS[g]}</span>${gestureLabel(g)}</button>`).join('') : '';
+    this.gestureBar.querySelectorAll('[data-g]').forEach((b) => {
+      const g = b.dataset.g;
+      this.pressable(b, () => { b.classList.add('down'); this.gesture(g, true); }, () => { b.classList.remove('down'); this.gesture(g, false); });
     });
   }
 
@@ -293,8 +343,10 @@ class BoardView {
       this.pinTexts[p].textContent = out !== undefined ? String(Math.round(out)) : f.analog && f.analog.includes(p) ? String(mb.analogIn[p]) : '';
       this.pinGrads[p].set(out !== undefined ? 100 - Math.round(out / 1023 * 100) : 100);
     }
-    // tilt picture
-    if (f.accel) {
+    // tilt picture (a held gesture of the bar has its own, bigger picture)
+    if (this.pose) {
+      this.wrap.style.transform = GESTURE_POSES[this.pose] || '';
+    } else if (f.accel) {
       const af = 8 / 1023, x = mb.accel.x, y = -mb.accel.y;
       const s = 1 - Math.min(0.1, Math.pow(Math.max(Math.abs(x), Math.abs(y)) / 1023, 2) / 35);
       this.wrap.style.transform = `perspective(30em) rotateX(${y * af}deg) rotateY(${x * af}deg) scale(${s}, ${s})`;
@@ -302,5 +354,5 @@ class BoardView {
     if (f.radio) this.antenna.setAttribute('stroke', mb.log.length && mb.log[mb.log.length - 1].kind === 'radio' && mb.now - mb.log[mb.log.length - 1].t < 200 ? '#fff' : '#555');
   }
 
-  remove() { this.wrap.remove(); }
+  remove() { this.col.remove(); }
 }

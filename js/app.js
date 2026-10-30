@@ -747,35 +747,31 @@ function selectChallenge(id) {
 function renderGuided() {
   if (App.exam) { renderExam(); return; }
   const ch = App.challenge, entry = Progress.ch(ch.id);
-  $('stepper').innerHTML = CATEGORIES.map((cat) => {
-    const dots = CHALLENGES.filter((c) => c.cat === cat.id).map((c) => {
-      const st = Progress.data.challenges[c.id].status;
-      return `<button class="mc-dot ${st}${c.id === ch.id ? ' current' : ''}${c.quiz ? ' quiz' : ''}" data-ch="${c.id}" title="${esc(c.title)}${c.quiz ? ' (quiz)' : ''} · ${{ locked: 'locked', open: 'to do', validated: 'passed' }[st]}">${st === 'validated' ? '✓' : st === 'locked' ? '🔒' : c.quiz ? '?' : c.n}</button>`;
-    }).join('');
-    return `<div class="mc-unit${cat.id === ch.cat ? ' on' : ''}"><span class="mc-unit-label">${cat.icon} ${esc(cat.label)}</span>${dots}</div>`;
-  }).join('');
+  $('stepper').innerHTML = ''; // the list of all the challenges is behind "All challenges"
+  $('challengeBox').dataset.unit = ch.cat;
   $('challengeTitle').textContent = ch.title;
-  $('challengeMeta').textContent = `${ch.n} / ${CHALLENGES.length}`;
+  $('challengeMeta').textContent = `${categoryOf(ch).label.split(' · ')[0]} · ${ch.quiz ? 'Quiz · ' : ''}${ch.n} / ${CHALLENGES.length}`;
+  $('btnAllCh').hidden = false;
   $('btnSolution').hidden = !App.preview || ch.quiz;
-  $('challengeDesc').innerHTML = `${ch.description}<span class="skills">${esc(ch.lesson || '')} · ${esc(ch.skills)}</span>`;
+  $('challengeDesc').innerHTML = ch.description;
   const hints = ch.hints || [];
   $('hintBox').innerHTML = hints.slice(0, entry.hints).map((h, i) => `<div class="hint-card">💡 <b>Hint ${i + 1}:</b> ${esc(h)}</div>`).join('');
-  $('btnHint').hidden = entry.hints >= hints.length;
-  $('btnHint').textContent = `💡 Hint (${entry.hints + 1}/${hints.length})`;
-  $('btnEvaluate').textContent = ch.quiz ? '✅ Check my answers' : '✅ Check my answer';
+  $('btnHint').hidden = entry.hints >= hints.length || entry.status === 'validated';
+  $('btnHint').textContent = entry.hints ? '💡 Another hint' : '💡 Need a hint?';
   renderValidation();
   updateButtons();
 }
 function renderValidation() {
   const ch = App.challenge, entry = Progress.ch(ch.id);
   const box = $('validateBox');
-  $('btnEvaluate').hidden = entry.status === 'validated' && !ch.quiz;
+  // a quiz has its own button under the questions
+  $('btnEvaluate').hidden = ch.quiz || entry.status === 'validated';
   if (entry.status === 'validated') {
     const next = CHALLENGES[CHALLENGES.indexOf(ch) + 1];
-    box.innerHTML = `<div class="banner done"><div class="big">🎉 Passed${entry.bestScore !== null ? ' with ' + entry.bestScore + ' %' : ''}!</div>
-      ${next ? `<div class="row"><button class="primary" id="btnNext">Next → ${esc(next.title)}</button></div>` : '<div><b>🏆 You finished all the challenges. Congratulations!</b></div>'}</div>`;
+    box.innerHTML = `<div class="mc-done"><div class="mc-done-title">🎉 Passed${entry.bestScore !== null ? ' with ' + entry.bestScore + ' %' : ''}!</div>
+      ${next ? `<button class="mc-check purple" id="btnNext">Next: ${esc(next.title)} →</button>` : '<div><b>🏆 You finished all the challenges!</b></div>'}</div>`;
     if (next) { $('btnNext').onclick = () => enterChallenge(next.id); $('btnNext').disabled = App.status !== 'idle'; }
-  } else box.innerHTML = entry.gradings.length ? `<div class="muted">Best check so far: ${entry.bestScore} % · you need ${CLASSROOM.passScore} % to pass.</div>` : '';
+  } else box.innerHTML = entry.gradings.length ? `<div class="mc-best">Best so far: <b>${entry.bestScore} %</b> · ${CLASSROOM.passScore} % needed</div>` : '';
 }
 function onValidated(id) {
   if (!Progress.validate(id, 'teacher')) return;
@@ -841,7 +837,6 @@ async function evaluate() {
     App.status = 'evaluating';
     updateButtons();
     storeWorkspace();
-    $('practiceResult').innerHTML = '<b>Checking your program…</b>';
     await new Promise((r) => setTimeout(r, 30));
     try { res = evaluateChallenge(ch, programForCheck(ws)); } catch (e) { console.error(e); res = { score: 0, criteria: [{ label: 'Your program could not run: ' + e.message, points: 0, max: 1 }], trials: [] }; res.trials = [{ score: 0, criteria: res.criteria }]; }
     App.status = 'idle';
@@ -922,6 +917,7 @@ function liveState(status) {
 function updateButtons() {
   const busy = App.status !== 'idle';
   for (const id of ['btnEvaluate', 'btnHint']) $(id).disabled = busy;
+  $('btnEvaluate').textContent = busy ? '⏳ Checking…' : '✅ Check my answer';
   $('stepper').querySelectorAll('button').forEach((b) => { b.disabled = busy; });
 }
 function updateSaveStatus() {
@@ -930,8 +926,8 @@ function updateSaveStatus() {
   if (!Progress.data) { el.textContent = ''; return; }
   if (Sync.online) {
     const t = Sync.savedAt ? new Date(Sync.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    el.textContent = Progress.dirty || !Sync.savedAt ? '☁️ Saving…' : `☁️ Saved ${t}`;
-    el.title = 'Your work is saved automatically.';
+    el.textContent = Progress.dirty || !Sync.savedAt ? '☁️ Saving…' : '☁️ Saved';
+    el.title = `Your work is saved automatically (last save ${t}).`;
   } else {
     el.textContent = '⚠️ Not saved online';
     el.title = 'The class server cannot be reached. Download your work to keep it (⚙ → Save my work).';
@@ -1093,6 +1089,7 @@ function init() {
   $('btnHint').onclick = showHint;
   $('btnEvaluate').onclick = evaluate;
   $('btnSolution').onclick = showSolution;
+  $('btnAllCh').onclick = showHome;
   // welcome
   document.querySelectorAll('.choice').forEach((b) => { b.onclick = () => chooseMode(b.dataset.mode); });
   $('wChange').onclick = () => pickClass($('wClass').value);
@@ -1164,6 +1161,7 @@ async function devHook() {
   if (p.get('search')) { $('tbSearch').value = p.get('search'); searchBlocks(p.get('search')); }
   if (p.get('view')) setView(p.get('view'));
   if (p.get('click')) setTimeout(() => p.get('click').split(',').forEach((b) => SimRun.boards[0] && SimRun.boards[0].click(b)), 300);
+  if (p.get('pose')) setTimeout(() => SimRun.views[0].gesture(p.get('pose'), true), 400);
   if (p.get('check')) { storeWorkspace(); await evaluate(); }
   if (p.get('home')) showHome();
 }

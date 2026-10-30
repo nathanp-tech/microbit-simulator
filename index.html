@@ -41,19 +41,19 @@
   <main id="mcMain">
     <aside id="simPanel">
       <div id="challengeBox" class="mc-tut" hidden>
-        <div class="mc-tut-head"><h2 id="challengeTitle"></h2><span class="count" id="challengeMeta"></span></div>
+        <div class="mc-tut-head">
+          <div class="mc-tut-kicker"><span id="challengeMeta"></span><button id="btnAllCh" class="mc-tut-link" title="See all the challenges">All challenges</button></div>
+          <h2 id="challengeTitle"></h2>
+        </div>
         <div id="stepper" class="mc-steps"></div>
         <div class="mc-tut-body">
-          <div id="challengeDesc" class="desc"></div>
+          <div class="mc-mission"><div class="mc-mission-label">🎯 Your mission</div><div id="challengeDesc" class="desc"></div></div>
           <div id="hintBox" class="hints"></div>
-          <div class="mc-tut-actions">
-            <button id="btnHint" class="mc-btn" title="Show a hint">💡 Hint</button>
-            <button id="btnSolution" class="mc-btn" title="Teacher preview: the reference solution" hidden>🔑 Solution</button>
-            <span style="flex:1"></span>
-            <button id="btnEvaluate" class="mc-btn green">✅ Check my answer</button>
-          </div>
+          <button id="btnHint" class="mc-hint-link" title="Show a hint">💡 Need a hint?</button>
           <div id="practiceResult" class="mc-result"></div>
           <div id="validateBox"></div>
+          <button id="btnEvaluate" class="mc-check">✅ Check my answer</button>
+          <button id="btnSolution" class="mc-hint-link" title="Teacher preview: the reference solution" hidden>🔑 Show the solution</button>
         </div>
       </div>
       <div id="notesPanel" class="card notes-panel" hidden></div>
