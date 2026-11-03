@@ -13,7 +13,7 @@ _fib = []        # [generator, wake time]
 _h = {}          # event -> [function, running, waiting args]
 _pins = []
 _radio = None
-_st = {'A': False, 'B': False, 'ab': False, 'tempo': 120, 'vol': 128, 'pins': {}, 'logo': False, 'last': None}
+_st = {'g': accelerometer.current_gesture(), 'A': False, 'B': False, 'ab': False, 'tempo': 120, 'vol': 128, 'pins': {}, 'logo': False, 'last': None}
 
 
 def _spawn(g):
@@ -86,8 +86,12 @@ def _poll():
                 fire('b:AB')
             else:
                 fire('b:' + n)
-    for g in accelerometer.get_gestures():
-        fire('g:' + g)
+    # a gesture event when the current gesture changes (the gesture history of the V2 misses "shake")
+    g = accelerometer.current_gesture()
+    if g != _st['g']:
+        _st['g'] = g
+        if g:
+            fire('g:' + g)
     for p in _pins:
         t = _pin(p).is_touched()
         if t != _st['pins'].get(p, False):

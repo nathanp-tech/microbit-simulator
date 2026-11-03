@@ -1164,7 +1164,17 @@ async function devHook() {
   if (p.get('check')) { storeWorkspace(); await evaluate(); }
   if (p.get('home')) showHome();
   if (p.get('download')) Flash.download();
-  if (p.get('hexout')) { const pre = document.createElement('pre'); pre.id = 'hexout'; pre.textContent = await Flash.buildHex(); document.body.appendChild(pre); }
+  if (p.get('hexout')) {
+    let hex;
+    if (p.get('rawpy')) { // a MicroPython main.py written by hand (tests on a real micro:bit)
+      const [[fsLib], [v1, v2, mbrt]] = await Promise.all([Flash.loadLibs(), Flash.loadFiles()]);
+      const fs = new fsLib.MicropythonFsHex([{ hex: v1, boardId: fsLib.microbitBoardId.V1 }, { hex: v2, boardId: fsLib.microbitBoardId.V2 }]);
+      fs.write('mbrt.py', mbrt);
+      fs.write('main.py', p.get('rawpy'));
+      hex = fs.getUniversalHex();
+    } else hex = await Flash.buildHex();
+    const pre = document.createElement('pre'); pre.id = 'hexout'; pre.textContent = hex; document.body.appendChild(pre);
+  }
   if (p.get('hex')) {
     try {
       const hex = await Flash.buildHex();

@@ -95,8 +95,7 @@ def make_board(script, limit):
 
     class Acc:
         def get_gestures(self):
-            g, st['gestures'] = tuple(st['gestures']), []
-            return g
+            return ()  # the V2 does not record "shake" here: the runtime must not rely on it
 
         def current_gesture(self):
             return st['cur']
@@ -193,7 +192,9 @@ def script_of(*items):
             sc[t] = (lambda keys: lambda st: [st['buttons'].__setitem__(k, True) for k in keys])(keys)
             sc[t + 100] = (lambda keys: lambda st: [st['buttons'].__setitem__(k, False) for k in keys])(keys)
         elif a[0] == 'gesture':
-            sc[t] = (lambda g: lambda st: st['gestures'].append(g))(a[1])
+            # like the micro:bit V2: the current gesture is "shake" for a moment, then back to "face up"
+            sc[t] = (lambda g: lambda st: st.__setitem__('cur', g))(a[1])
+            sc[t + 300] = lambda st: st.__setitem__('cur', 'face up')
         elif a[0] == 'light':
             sc[t] = (lambda v: lambda st: st.__setitem__('light', v))(a[1])
         elif a[0] == 'temp':
@@ -232,7 +233,7 @@ def checks(id_, main):
         st = run(main, script_of((1000, ('gesture', 'shake')), (1500, ('gesture', 'shake')), (2000, ('gesture', 'shake')), (3000, 'A'), (6000, 'B'), (7000, 'A')), 9000)
         ok(texts(st, 3000, 5900) == ['3'] and texts(st, 7000) == ['0'], 'steps: 3, then 0 after B %s' % texts(st))
         if id_ == 'progress-bar':
-            ok(lit(run(main, script_of(*[(500 + i * 300, ('gesture', 'shake')) for i in range(10)]), 5000)) >= 6, 'the bar grows')
+            ok(lit(run(main, script_of(*[(500 + i * 400, ('gesture', 'shake')) for i in range(10)]), 6000)) >= 6, 'the bar grows')
     elif id_ == 'night-light':
         st = run(main, script_of((500, ('light', 10))), 2000)
         ok(lit(st) == 25, 'dark: all the LEDs on')
