@@ -87,6 +87,8 @@
     </section>
   </main>
 
+  <div id="flashProgress" class="mc-flash" hidden><div class="fp-text"></div><div class="fp-bar"><div></div></div></div>
+  <div id="downloadMenu" class="mc-menu mc-dl-menu" hidden></div>
   <footer id="mcFooter">
     <div class="mc-foot-left">
       <button id="btnDownload" class="mc-download" title="Download"><svg viewBox="0 0 24 24"><path d="M11 3h2v10.2l3.6-3.6L18 11l-6 6-6-6 1.4-1.4 3.6 3.6zM5 19h14v2H5z"/></svg>Download</button>
@@ -155,6 +157,7 @@
     </div>
   </div>
 
+  <script type="importmap">{ "imports": { "nrf-intel-hex": "./lib/microbit/nrf-intel-hex/intel-hex.js", "@microbit/microbit-universal-hex": "./lib/microbit/universal-hex/index.js" } }</script>
   <script src="lib/blockly/blockly_compressed.js"></script>
   <script src="lib/blockly/msg/en.js"></script>
   <script src="js/mbdata.js"></script>
@@ -165,6 +168,8 @@
   <script src="js/board.js"></script>
   <script src="js/challenges.js"></script>
   <script src="js/evaluator.js"></script>
+  <script src="js/pygen.js"></script>
+  <script src="js/flash.js"></script>
   <script src="js/config.js"></script>
   <script src="js/roster.js"></script>
   <script src="js/progress.js"></script>

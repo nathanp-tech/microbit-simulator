@@ -1025,12 +1025,6 @@ function showHelp() {
     </ul>
     <h3>Saving</h3><ul><li>Your work is saved automatically. ⚙ → <b>Save my work</b> downloads a copy.</li></ul>`);
 }
-function downloadInfo() {
-  openModal(`<h2>Download</h2><p>This is a simulator: there is no micro:bit to download to, and <b>your work is saved automatically</b>.</p>
-    <p>${App.mode === 'challenge' && App.challenge ? 'To get your score, click <b>✅ Check my answer</b>.' : 'Test your program in the simulator on the left.'}</p>
-    <div style="display:flex;gap:8px;justify-content:flex-end"><button id="dlCopy">💾 Download a copy of my work</button><button class="primary" onclick="closeModal()">OK</button></div>`);
-  $('dlCopy').onclick = () => { closeModal(); saveWork(); };
-}
 
 // =====================================================================
 // Init
@@ -1076,8 +1070,13 @@ function init() {
   $('dataBack').onclick = () => { $('dataView').hidden = true; };
   $('dataClear').onclick = () => { SimRun.serial = []; SimRun.serialNums = []; renderData(); };
   // footer
-  $('btnDownload').onclick = downloadInfo;
-  $('btnDownloadMore').onclick = downloadInfo;
+  $('btnDownload').onclick = () => Flash.download();
+  $('btnDownloadMore').onclick = (e) => { e.stopPropagation(); Flash.menu($('btnDownloadMore')); };
+  document.addEventListener('click', () => { $('downloadMenu').hidden = true; });
+  if (Flash.supported() && navigator.usb.getDevices) {
+    // a micro:bit paired in an earlier lesson: Download sends the program directly
+    navigator.usb.getDevices().then((d) => { if (d.length) Flash.connection().then(updateDownloadButton).catch(() => {}); }).catch(() => {});
+  }
   $('btnSaveProject').onclick = () => { if (Progress.data) { storeWorkspace(); Sync.push(liveState(), true); toast(Sync.online ? '☁️ Saved.' : '💾 Saved on this computer.'); } };
   $('projectName').addEventListener('input', () => { if (App.mode === 'sandbox' && Progress.data) { Progress.data.free.name = $('projectName').value.slice(0, 60); Progress.persist(); } });
   $('btnUndo').onclick = () => ws.undo(false);
@@ -1164,5 +1163,17 @@ async function devHook() {
   if (p.get('pose')) setTimeout(() => SimRun.views[0].gesture(p.get('pose'), true), 400);
   if (p.get('check')) { storeWorkspace(); await evaluate(); }
   if (p.get('home')) showHome();
+  if (p.get('download')) Flash.download();
+  if (p.get('hex')) {
+    try {
+      const hex = await Flash.buildHex();
+      const [fsLib] = await Flash.loadLibs();
+      console.log('BUILT', hex.length, hex.slice(0, 60).replace(/\n/g, ' '));
+      const [v1, v2] = await Flash.loadFiles();
+      const back = new fsLib.MicropythonFsHex([{ hex: v1, boardId: fsLib.microbitBoardId.V1 }, { hex: v2, boardId: fsLib.microbitBoardId.V2 }]);
+      back.importFilesFromUniversalHex(hex);
+      console.log('HEX', hex.length, back.ls().join(','), back.read('main.py').length, JSON.stringify(back.read('main.py').slice(0, 400)));
+    } catch (e) { console.log('HEXERR', e.message); }
+  }
 }
 window.addEventListener('load', init);

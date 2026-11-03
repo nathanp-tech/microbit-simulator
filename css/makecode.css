@@ -300,3 +300,19 @@ body.mc.preview #mcHeader { background: #b36b00; }
 .sim-gesture.down { background: #3454D1; border-color: #3454D1; color: #fff; }
 .sim-pose { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(0.9); background: rgba(52, 84, 209, 0.92); color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 16px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.15s; white-space: nowrap; }
 .sim-pose.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+/* ---------- Download to a real micro:bit ---------- */
+.mc-download.connected { background: #107c10; }
+.mc-download.connected:hover { background: #0b5a0b; }
+.mc-download.connected::after { content: "🔌"; font-size: 15px; margin-left: 2px; }
+.mc-dl-menu { position: fixed; top: auto; right: auto; min-width: 220px; }
+.mc-flash { position: fixed; left: 12px; bottom: 70px; width: calc(var(--sim-w) - 24px); background: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); padding: 10px 14px; z-index: 1100; font-weight: 600; font-size: 14px; }
+.mc-flash .fp-bar { height: 8px; background: #e6e1f5; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.mc-flash .fp-bar > div { height: 100%; background: #6633cc; width: 0; transition: width 0.2s; }
+.mc-flash.done { color: #0b5a0b; }
+.mc-flash.done .fp-bar > div { background: #107c10; }
+.mc-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.mc-pair-step { background: #f4f6fb; border-radius: 12px; padding: 12px; position: relative; text-align: center; }
+.mc-pair-step p { margin: 6px 0 0; font-size: 14px; line-height: 1.45; }
+.mc-pair-n { position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 50%; background: #6633cc; color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.mc-pair-pic { font-size: 40px; margin-top: 6px; }

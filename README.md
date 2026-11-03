@@ -1,6 +1,6 @@
 # micro:bit Simulator
 
-A web app that looks and works like **MakeCode for micro:bit** (makecode.microbit.org): same editor, same blocks, same simulator. It is built for student practice and assessment: each student signs in with their class and name, works on the challenges of the lessons, and checks their answer automatically. The teacher follows every student live. Nothing needs to be installed and no internet connection is required (no download to a real micro:bit: the simulator is the board).
+A web app that looks and works like **MakeCode for micro:bit** (makecode.microbit.org): same editor, same blocks, same simulator. It is built for student practice and assessment: each student signs in with their class and name, works on the challenges of the lessons, and checks their answer automatically. The teacher follows every student live. Nothing needs to be installed and no internet connection is required. Programs run in the simulator, and can also be downloaded to a real micro:bit with the USB cable.
 
 ## In class
 
@@ -19,7 +19,21 @@ A web app that looks and works like **MakeCode for micro:bit** (makecode.microbi
 - **JavaScript:** the MakeCode JavaScript of the blocks (read only).
 - **Simulator:** the V2 board of MakeCode. Buttons A, B and the virtual A+B, logo touch, pins 0 / 1 / 2, SHAKE button (and one button per other gesture used), tilt with the mouse, light level circle, thermometer, compass, sound level, a second micro:bit when the radio is used, *Show data Simulator* for the serial port, stop / restart / slow-mo / mute / screenshot / fullscreen. Same timings as MakeCode: 150 ms per column when scrolling, 400 ms after *show leds*, 600 ms after *show icon*, 20 ms between two turns of *forever*.
 
-Not available: download to a real micro:bit, extensions, editing in JavaScript / Python, the debugger.
+Not available: extensions, editing in JavaScript / Python, the debugger.
+
+## Download to a real micro:bit
+
+The **Download** button works like in MakeCode:
+- **Chrome or Edge (WebUSB):** the first time, *Connect your micro:bit* asks to plug in the USB cable and click **Pair** (choose *BBC micro:bit CMSIS-DAP*). Then every **Download** sends the program directly (progress bar, a few seconds). The button turns green with 🔌 while a micro:bit is connected; **…** → *Disconnect* / *Connect device*.
+- **Other browsers, or "… → Download as file":** a `.hex` file is downloaded; drag it onto the **MICROBIT** drive.
+
+How it works: the blocks are translated into **MicroPython** (`js/pygen.js`) and run on `lib/microbit/mbrt.py`, a small runtime that behaves like MakeCode (on start, forever and event blocks run side by side; a pause or *show…* lets the other blocks run; A+B, gestures, pins, logo, radio between micro:bits running this app, music). The `.hex` is built with the official MicroPython firmware (V1 1.1.1 and V2 2.1.1) and the micro:bit Foundation libraries (`microbit-fs`, `microbit-connection`), all in `lib/microbit/` (offline).
+
+Notes:
+- Made for the **micro:bit V2** (the runtime needs its memory; a V1 may show a memory error).
+- A few blocks only work in the simulator (Game sprites…): Download then says which ones to remove.
+- WebUSB needs a recent micro:bit firmware (DAPLink); if pairing fails, use *Download as file*.
+- The radio only talks to micro:bits programmed with this app (not to MakeCode programs).
 
 ## The assessment (Class 5, Term 2)
 
@@ -64,6 +78,7 @@ Same as the EV3 Simulator: `api/index.py` stores the data in an Upstash Redis da
 Run the class server with a test folder (the class data is never touched): `MB_DATA_DIR=/tmp/mbtest python3 server.py 8101 --no-browser`, then:
 - `tests/selftest.html` (open `http://localhost:8101/tests/selftest.html`): every reference solution scores 100 %, an empty program 0 %, every wrong program fails its criterion, plus the tests of the block engine. It also prints the answer key: after changing `tests/solutions_src.js`, copy it into `api/_solutions.json`, then send it online with `tests/upload_solutions.py`.
 - `python3 tests/apitest.py http://localhost:8101`: every API endpoint.
+- `python3 tests/run_python.py programs.json`: runs the MicroPython of every reference solution (the last block of `tests/selftest.html`, saved as JSON) on an imitation of the micro:bit with `mbrt.py`, and checks what the board shows.
 
 ## Structure
 
@@ -77,6 +92,7 @@ js/runtime.js               the micro:bit (fibers in virtual time, display, sens
 js/board.js                 the V2 board and its controls
 js/challenges.js            the challenges, quizzes and their tests
 js/evaluator.js             automatic checking
+js/pygen.js, js/flash.js    blocks → MicroPython, .hex and download over USB;  lib/microbit/: runtime, firmware, libraries
 js/app.js                   student app;  js/classroom.js: help, comments, class commands, exams, history
 js/progress.js              student progress, save file, live sync
 js/teacher.js, teacher-classroom.js, analysis.js   dashboard

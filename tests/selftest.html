@@ -11,6 +11,8 @@
   <pre id="out">Running…</pre>
   <h2>Answer key (api/_solutions.json)</h2>
   <pre id="json"></pre>
+  <h2>MicroPython of the reference solutions (tests/run_python.py)</h2>
+  <pre id="py"></pre>
   <script src="../lib/blockly/blockly_compressed.js"></script>
   <script src="../lib/blockly/msg/en.js"></script>
   <script src="../js/mbdata.js"></script>
@@ -20,6 +22,7 @@
   <script src="../js/runtime.js"></script>
   <script src="../js/challenges.js"></script>
   <script src="../js/evaluator.js"></script>
+  <script src="../js/pygen.js"></script>
   <script src="solutions_src.js"></script>
   <script src="engine.js"></script>
   <script>
@@ -58,6 +61,11 @@
     lines.unshift(`<b>${failures ? failures + ' FAILURE(S)' : 'ALL OK'}</b> in ${Math.round(performance.now() - t0)} ms`);
     document.getElementById('out').innerHTML = lines.join('\n');
     document.getElementById('json').textContent = JSON.stringify(SOLUTIONS);
+    const PY = {};
+    for (const [id, sols] of Object.entries(SOLUTIONS)) {
+      PY[id] = sols.map((s) => { const w = new Blockly.Workspace(); Blockly.serialization.workspaces.load(s.program, w); const r = generatePython(w); w.dispose(); return r; });
+    }
+    document.getElementById('py').textContent = JSON.stringify(PY);
     document.title = failures ? 'FAIL ' + failures : 'ALL OK';
   </script>
 </body>
