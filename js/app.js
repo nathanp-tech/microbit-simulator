@@ -1164,6 +1164,7 @@ async function devHook() {
   if (p.get('check')) { storeWorkspace(); await evaluate(); }
   if (p.get('home')) showHome();
   if (p.get('download')) Flash.download();
+  if (p.get('hexout')) { const pre = document.createElement('pre'); pre.id = 'hexout'; pre.textContent = await Flash.buildHex(); document.body.appendChild(pre); }
   if (p.get('hex')) {
     try {
       const hex = await Flash.buildHex();
