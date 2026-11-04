@@ -71,8 +71,8 @@ const Flash = {
       const hex = await this.buildHex();
       if (!hex) return;
       download(this.fileName(), new Blob([hex], { type: 'application/octet-stream' }));
-      if (explain) this.dragDialog();
-      else toast('💾 ' + this.fileName() + ' downloaded: drag it onto the MICROBIT drive.');
+      if (explain && !this.skipDialog()) this.dragDialog();
+      else toast('💾 ' + this.fileName() + (isSafari() ? ': save it on MICROBIT (or drag it there from Downloads).' : ' downloaded: drag it onto the MICROBIT drive.'));
     } catch (e) { this.failed(e); }
   },
   async flash(usb) {
@@ -125,7 +125,9 @@ const Flash = {
       } catch (e) { this.failed(e); }
     };
   },
+  skipDialog() { try { return localStorage.getItem('mbsim.noDragDialog') === '1'; } catch (e) { return false; } },
   dragDialog() {
+    if (isSafari()) { this.safariDialog(); return; }
     openModal(`<h2>Move the .hex file to your micro:bit</h2>
       <div class="mc-pair">
         <div class="mc-pair-step"><div class="mc-pair-n">1</div><div class="mc-pair-pic">🔌</div><p>Connect the micro:bit to your computer with the USB cable. A drive called <b>MICROBIT</b> appears.</p></div>
@@ -134,6 +136,22 @@ const Flash = {
       </div>
       <p class="muted">Tip: in Chrome or Edge, the micro:bit can be paired so that <b>Download</b> sends the program directly.</p>
       <div style="text-align:right"><button class="primary" onclick="closeModal()">Done</button></div>`);
+  },
+  // Safari has no WebUSB: if Safari asks where to save each download, the student saves straight onto MICROBIT
+  safariDialog() {
+    openModal(`<h2>Send your program to the micro:bit</h2>
+      <div class="mc-pair">
+        <div class="mc-pair-step"><div class="mc-pair-n">1</div><div class="mc-pair-pic">🔌</div><p>Connect the micro:bit with the USB cable. A drive called <b>MICROBIT</b> appears.</p></div>
+        <div class="mc-pair-step"><div class="mc-pair-n">2</div><div class="mc-pair-pic">💾</div><p>When Safari asks where to save <b>${esc(this.fileName())}</b>, choose <b>MICROBIT</b> and click <b>Save</b>.</p></div>
+        <div class="mc-pair-step"><div class="mc-pair-n">3</div><div class="mc-pair-pic">💡</div><p>The yellow light on the back blinks, then your program runs.</p></div>
+      </div>
+      <p class="muted">Safari did not ask? Do this once: <b>Safari → Settings… → General → File download location → Ask for each download</b>.
+        Or open <b>Downloads</b> in the Finder and drag the file onto <b>MICROBIT</b>.</p>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center"><label class="muted"><input type="checkbox" id="flNoAsk"> Don't show this again</label><button class="primary" id="flOk">Done</button></div>`);
+    $('flOk').onclick = () => {
+      if ($('flNoAsk').checked) { try { localStorage.setItem('mbsim.noDragDialog', '1'); } catch (e) { /* private window */ } }
+      closeModal();
+    };
   },
   menu(anchor) {
     const m = $('downloadMenu');
@@ -157,6 +175,7 @@ const Flash = {
   },
 };
 
+function isSafari() { return /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent); }
 function updateDownloadButton() {
   const b = $('btnDownload');
   if (!b) return;

@@ -1164,6 +1164,7 @@ async function devHook() {
   if (p.get('check')) { storeWorkspace(); await evaluate(); }
   if (p.get('home')) showHome();
   if (p.get('download')) Flash.download();
+  if (p.get('dragdialog')) Flash.dragDialog();
   if (p.get('hexout')) {
     let hex;
     if (p.get('rawpy')) { // a MicroPython main.py written by hand (tests on a real micro:bit)
