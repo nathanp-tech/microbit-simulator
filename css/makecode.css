@@ -316,3 +316,30 @@ body.mc.preview #mcHeader { background: #b36b00; }
 .mc-pair-step p { margin: 6px 0 0; font-size: 14px; line-height: 1.45; }
 .mc-pair-n { position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 50%; background: #6633cc; color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .mc-pair-pic { font-size: 40px; margin-top: 6px; }
+
+/* Short laptop screens (720–800 px high): a smaller board, so the gesture bar and the controls stay in view */
+@media (max-height: 800px) { .mc-boards:not(.two) .sim-board-col { max-width: 230px; } .mc-boards { padding-top: 8px; } }
+
+/* The mission: short steps, then how to test it in the simulator */
+.mc-mission .desc ul.steps { display: block; margin: 0; padding-left: 20px; }
+.mc-mission .desc ul.steps li { margin: 3px 0; }
+.mc-mission .desc .test-it { margin: 10px 0 0; padding: 7px 10px; background: #fff7e0; border-radius: 8px; font-size: 14px; line-height: 1.45; }
+body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, body.quiz-mode .mc-foot-left { visibility: hidden; }
+.mc-dot.sent { background: #107c10; color: #fff; border-color: #107c10; }
+
+/* The bar of steps under the header */
+.step-bar { display: flex; align-items: center; gap: 14px; padding: 6px 14px; background: #fff; border-bottom: 1px solid #dcdcdc; overflow-x: auto; flex: 0 0 auto; }
+.sb-count { white-space: nowrap; font-size: 13px; color: #444; }
+.sb-steps { display: flex; align-items: center; flex: 1; min-width: 0; }
+.sb-line { flex: 1 1 12px; min-width: 8px; height: 2px; background: #d6d6d6; }
+.sb-step { display: flex; align-items: center; gap: 6px; border: 2px solid transparent; background: none; border-radius: 18px; padding: 3px 10px 3px 3px; cursor: pointer; font: inherit; font-size: 13px; color: #333; white-space: nowrap; }
+.sb-step:hover:not(:disabled) { background: #f0f3ff; }
+.sb-step .sb-n { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; background: #e8e8e8; color: #555; }
+.sb-step.done .sb-n { background: #107c10; color: #fff; }
+.sb-step.current { border-color: var(--mc-blue, #3454D1); background: #eef2ff; font-weight: 700; }
+.sb-step.current .sb-n { background: var(--mc-blue, #3454D1); color: #fff; }
+.sb-step.locked { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 1250px) { .sb-step:not(.current) .sb-t { display: none; } .sb-step:not(.current) { padding-right: 3px; } }
+.sb-timer { white-space: nowrap; background: #5b3cc4; color: #fff; border-radius: 14px; padding: 4px 12px; font-size: 13px; }
+.sb-timer.soon { background: #d13438; }
+.exam-note { font-size: 13px; color: #555; text-align: center; }

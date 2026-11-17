@@ -229,10 +229,13 @@ def checks(id_, main):
     elif id_ == 'rps':
         st = run(main, script_of(*[(1000 + i * 1500, ('gesture', 'shake')) for i in range(30)]), 47000)
         ok(len(images(st)) == 30 and len(set(images(st))) == 3, 'three pictures at random')
-    elif id_ in ('step-counter', 'progress-bar'):
+    elif id_ == 'step-counter':
+        st = run(main, script_of((1000, ('gesture', 'shake')), (2200, ('gesture', 'shake')), (3400, ('gesture', 'shake')), (5000, 'B'), (6500, ('gesture', 'shake'))), 8000)
+        ok(texts(st, 0, 4900) == ['1', '2', '3'] and texts(st, 6500) == ['1'], 'shake shows 1, 2, 3; after B: 1 %s' % texts(st))
+    elif id_ == 'progress-bar':
         st = run(main, script_of((1000, ('gesture', 'shake')), (1500, ('gesture', 'shake')), (2000, ('gesture', 'shake')), (3000, 'A'), (6000, 'B'), (7000, 'A')), 9000)
         ok(texts(st, 3000, 5900) == ['3'] and texts(st, 7000) == ['0'], 'steps: 3, then 0 after B %s' % texts(st))
-        if id_ == 'progress-bar':
+        if True:
             ok(lit(run(main, script_of(*[(500 + i * 400, ('gesture', 'shake')) for i in range(10)]), 6000)) >= 6, 'the bar grows')
     elif id_ == 'night-light':
         st = run(main, script_of((500, ('light', 10))), 2000)

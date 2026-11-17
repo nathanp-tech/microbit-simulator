@@ -519,11 +519,18 @@ class Api:
             snaps = [s for s in self.snaps().values() if s]
             if path == '/api/work/find':
                 # A student = class + first name (accents, case and spaces ignored). Old work without a class still matches.
+                # liveNow: this name is open on a computer right now (a classmate must not take it over during a test)
+                seen = hash_dict(self.r(['HGETALL', P + 'seen'])[0])
+                def live_now(s):
+                    pr = seen.get(s['studentId']) or {}
+                    t, live = max((pr.get('t') or 0, pr.get('live')), (s.get('receivedAt') or 0, s.get('live')), key=lambda x: x[0])
+                    return time.time() - t < 45 and (live or {}).get('status') != 'left'
                 name, cls = norm(params.get('name', '')), norm(params.get('className', '') if g == '*' else g)
                 found = sorted((s for s in snaps if norm(s.get('name')) == name and (not cls or norm(s.get('className')) in ('', cls))),
                                key=lambda s: s.get('updatedAt', ''), reverse=True)
                 return 200, {'matches': [{'studentId': s['studentId'], 'name': s.get('name'), 'className': s.get('className'), 'mode': s.get('mode'),
-                                          'updatedAt': s.get('updatedAt'), 'current': s.get('current'), 'validated': validated_count(s)} for s in found]}
+                                          'updatedAt': s.get('updatedAt'), 'current': s.get('current'), 'validated': validated_count(s),
+                                          'liveNow': live_now(s)} for s in found]}
             prefix = norm(params.get('prefix', ''))
             names = {}
             for s in sorted((s for s in snaps if prefix and norm(s.get('name')).startswith(prefix)), key=lambda s: s.get('updatedAt', '')):

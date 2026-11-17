@@ -25,7 +25,7 @@ class Tester {
     }
     return this;
   }
-  click(b, after = 0) { this.mb.click(b); return this.wait(after); }
+  click(b, after = 0) { this.mb.buttonDown(b); this.wait(100); this.mb.buttonUp(b); return this.wait(after); }
   shake(after = 0) { this.mb.doGesture('Shake'); return this.wait(after); }
   gesture(g, after = 0) { this.mb.doGesture(g); return this.wait(after); }
   setLight(v) { this.mb.light = v; return this; }
@@ -35,7 +35,9 @@ class Tester {
   // ---- what was shown ----
   log(t0 = 0, t1 = Infinity) { return this.mb.log.filter((e) => e.t >= t0 && e.t <= t1); }
   texts(t0 = 0, t1 = Infinity) { return this.log(t0, t1).filter((e) => e.kind === 'text' || e.kind === 'number').map((e) => String(typeof e.value === 'number' ? numStr(e.value) : e.value)); }
-  numbers(t0 = 0, t1 = Infinity) { return this.log(t0, t1).filter((e) => e.kind === 'number' || (e.kind === 'text' && /^-?\d+(\.\d+)?$/.test(String(e.value).trim()))).map((e) => Number(e.value)); }
+  numbers(t0 = 0, t1 = Infinity) {
+    return this.log(t0, t1).flatMap((e) => (e.kind === 'number' ? [Number(e.value)] : e.kind === 'text' ? (String(e.value).match(/-?\d+(\.\d+)?/g) || []).map(Number) : []));
+  }
   sawText(re, t0 = 0, t1 = Infinity) { return this.texts(t0, t1).some((s) => (re instanceof RegExp ? re.test(s) : s.toUpperCase().includes(String(re).toUpperCase()))); }
   // images shown with show leds / show icon / show arrow / show image
   images(t0 = 0, t1 = Infinity) { return this.log(t0, t1).filter((e) => ['leds', 'icon', 'arrow', 'image'].includes(e.kind)).map((e) => (e.kind === 'icon' ? patternKey(ICONS[e.value]) : e.kind === 'arrow' ? patternKey(ARROWS[e.value]) : e.value)).filter((k) => k && k.includes('1')); }
@@ -55,6 +57,8 @@ class Tester {
   uses(type) { return (this.prog.blockTypes || []).includes(type); }
   count(type) { return (this.prog.blockTypes || []).filter((t) => t === type).length; }
 }
+// Swiss grade from a percentage: 1 to 6, linear (60 % → 4), rounded to the half point
+function swissGrade(pct) { return Math.round((1 + 5 * pct / 100) * 2) / 2; }
 const patternKey = (p) => (p ? String(p).replace(/\s/g, '').split('').map((c) => (c === '#' ? '1' : '0')).join('') : '');
 const FULL = '1'.repeat(25), EMPTY = '0'.repeat(25);
 
@@ -67,7 +71,10 @@ function evaluateChallenge(ch, prog) {
     return { score: 0, criteria: c, trials: [{ score: 0, criteria: c }] };
   }
   const criteria = [];
+  // Event challenges: a forever loop that shows things by itself (without the button or the shake) is not an answer
+  const quiet = !ch.quietCheck || ch.quietCheck((seed = 1) => new Tester(prog, seed));
   for (const test of ch.tests) {
+    if (!quiet && !test.always) { criteria.push({ label: test.label, points: 0, max: test.points, ok: false }); continue; }
     let points = 0, detail = '';
     try {
       const r = test.run((seed = 1) => new Tester(prog, seed), prog);
@@ -79,6 +86,7 @@ function evaluateChallenge(ch, prog) {
     }
     criteria.push({ label: test.label + (detail ? ` (${detail})` : ''), points, max: test.points, ok: points === test.points });
   }
+  if (ch.quietCheck) criteria.push({ label: ch.quietLabel, points: 0, max: 0, ok: quiet });
   const max = criteria.reduce((a, c) => a + c.max, 0);
   const pts = criteria.reduce((a, c) => a + c.points, 0);
   return { score: max ? Math.round(pts / max * 100) : 0, criteria, trials: [{ score: max ? Math.round(pts / max * 100) : 0, criteria }] };

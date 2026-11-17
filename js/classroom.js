@@ -210,9 +210,9 @@ function renderExam() {
   const k = e.challenges.indexOf(ch.id);
   $('stepper').innerHTML = e.challenges.map((id, i) => {
     const s = examSlot(id);
-    return `<button class="mc-dot open${id === ch.id ? ' current' : ''}" data-ch="${esc(id)}" title="${esc(chTitle(id))}${s.best !== null ? ' · best ' + s.best + ' %' : ''}" style="${s.best !== null ? 'width:auto;padding:0 6px;border-radius:13px' : ''}">${s.best !== null ? s.best + '%' : i + 1}</button>`;
+    return `<button class="mc-dot open${id === ch.id ? ' current' : ''}${s.checks ? ' sent' : ''}" data-ch="${esc(id)}" title="${esc(chTitle(id))}${s.checks ? ' · submitted' : ''}">${s.checks ? '✓' : i + 1}</button>`;
   }).join('');
-  $('stepper').innerHTML = `<div class="mc-unit on"><span class="mc-unit-label">📝 ${esc(e.title)}</span>${$('stepper').innerHTML}</div>`;
+  $('stepper').innerHTML = ''; // the steps are in the bar under the header
   $('challengeTitle').textContent = `📝 ${chTitle(ch.id)}`;
   $('challengeMeta').textContent = `📝 Exam · ${k + 1} of ${e.challenges.length}`;
   $('btnAllCh').hidden = true;
@@ -224,8 +224,10 @@ function renderExam() {
   $('btnHint').hidden = slot.hints >= hints.length;
   $('btnHint').textContent = `💡 Hint (${slot.hints + 1}/${hints.length})`;
   $('btnEvaluate').hidden = CR.examOver || !!ch.quiz;
-  $('validateBox').innerHTML = `<div class="exam-best">${slot.best !== null ? `Your best score for this challenge: <b>${slot.best} %</b> (${slot.checks} check${slot.checks > 1 ? 's' : ''}).` : 'Not checked yet.'}
-    <span class="muted">Only your best <b>Check my solution</b> counts. You can keep improving until the end.</span></div>`;
+  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">${slot.checks ? '✅ Your answers are sent.' : 'Answer every question, then click <b>📨 Send my answers</b> (only once).'}</div>`
+    : `<div class="exam-note">${slot.checks ? '✅ <b>Submitted.</b> Improved it? Test it, then submit again.' : 'Test it in the simulator. When it works, submit it.'}</div>`;
+  updateButtons();
+  renderStepBar();
   applyNotes();
 }
 function examHint() {
@@ -243,10 +245,10 @@ function onExamGrade(res) {
   Progress.persist();
   queueExamResult({ studentId: Progress.data.studentId, examId: App.exam.id, challengeId: id, score: res.score, program, robot, name: Progress.data.name, className: Progress.data.className });
   renderExam();
-  const trials = ch.quiz ? '' : criteriaHtml(res.criteria);
-  openModal(`<h2>📝 Checked</h2><div class="big-score">${res.score} %</div>
-    <p>Your best score for this challenge: <b>${slot.best} %</b>. Only your best check counts: you can keep improving until the end of the exam.</p>
-    ${trials}<div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>`);
+  if (ch.quiz) { showQuiz(slot); openModal('<h2>✅ Your answers are sent</h2><p>Well done! Go on with the other challenges of the exam.</p><div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>'); return; }
+  // no score in the exam: the students test their program themselves, then submit it
+  openModal(`<h2>📨 Program submitted</h2><p>Your teacher will see it. If you improve it, test it again in the simulator and submit it again.</p>
+    <div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>`);
 }
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
 function queueExamResult(r) {
@@ -270,10 +272,11 @@ async function flushExamResults() {
   } finally { examFlushing = false; }
 }
 function updateExamBanner() {
-  const b = $('examBanner');
-  if (!App.exam) { b.hidden = true; return; }
+  // the timer is at the right of the bar of steps (one line less on small screens)
+  $('examBanner').hidden = true;
+  const b = $('sbTimer');
+  if (!App.exam || !b) return;
   const left = Math.max(0, App.exam.endsAt * 1000 - Sync.now()) / 1000;
-  b.hidden = false;
   b.classList.toggle('soon', left < 120 && !CR.examOver);
   b.innerHTML = CR.examOver ? `📝 ${esc(App.exam.title)} · ⏱ finished` : `📝 <b>${esc(App.exam.title)}</b> · ⏱ <b>${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}</b> left`;
   if (!CR.examOver && left <= 0) finishExam();
@@ -281,16 +284,40 @@ function updateExamBanner() {
 function finishExam() {
   if (!App.exam || CR.examOver) return;
   storeWorkspace();
+  submitForgotten();
   CR.examOver = true;
   flushExamResults();
   Progress.log('exam-end', null, App.exam.id);
   Progress.persist();
   Sync.push(liveState(), true);
   closeModal();
-  const rows = App.exam.challenges.map((id) => { const s = examSlot(id); return `<tr><td>${esc(chTitle(id))}</td><td><b>${s.best !== null ? s.best + ' %' : '—'}</b></td></tr>`; }).join('');
-  $('examOverlayBody').innerHTML = `<div class="ov-icon">⏱</div><h1>The exam is over</h1><p>Your best scores:</p><table class="exam-res">${rows}</table><p class="muted">Your work is saved. Wait for your teacher.</p>`;
+  const rows = App.exam.challenges.map((id) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? '✓ submitted' : '—'}</b></td></tr>`).join('');
+  $('examOverlayBody').innerHTML = `<div class="ov-icon">⏱</div><h1>The exam is over</h1><table class="exam-res">${rows}</table><p class="muted">Your work is saved. Wait for your teacher.</p>`;
   $('examOverlay').hidden = false;
   updateExamBanner();
+}
+// A program (or quiz answers) the student never submitted is graded at the end, so nothing is lost
+function submitForgotten() {
+  for (const id of App.exam.challenges) {
+    const slot = examSlot(id), ch = CHALLENGES.find((c) => c.id === id);
+    if (!ch || slot.checks) continue;
+    try {
+      let res, program;
+      if (ch.quiz) {
+        if (!(slot.answers || []).some((a) => a !== null && a !== undefined)) continue;
+        program = { quiz: true, answers: slot.answers };
+        res = gradeQuiz(ch, slot.answers);
+      } else {
+        if (!slot.program) continue;
+        program = slot.program;
+        res = evaluateChallenge(ch, programFromState(program));
+      }
+      slot.checks = 1;
+      slot.best = res.score;
+      slot.bestProgram = program;
+      queueExamResult({ studentId: Progress.data.studentId, examId: App.exam.id, challengeId: id, score: res.score, program, robot: null, name: Progress.data.name, className: Progress.data.className, auto: true });
+    } catch (e) { console.error(e); }
+  }
 }
 function leaveExam() {
   if (!App.exam) return;
@@ -303,6 +330,7 @@ function leaveExam() {
   closeModal();
   applyClassSettings();
   setMode(appModeOf(Progress.data.mode || 'guided'), { initial: true });
+  updateButtons();
   toast('📝 The exam is closed. You are back to your normal work.');
   Sync.push(liveState(), true);
 }

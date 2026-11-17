@@ -497,6 +497,8 @@ function showWelcome() {
   App.exam = null;
   CR.examOver = false;
   CR.helpSince = 0;
+  $('stepBar').hidden = true;
+  Sync.ver = null; // the next sign-in gets the class commands again (an exam that is running)
   $('examOverlay').hidden = $('pauseOverlay').hidden = $('closedOverlay').hidden = true;
   updateExamBanner();
   renderHelpButton();
@@ -584,10 +586,10 @@ async function onRemoteChange(stale = false) {
   if (remoteBusy || !Progress.data) return;
   remoteBusy = true;
   try {
-    if (stale) storeWorkspace();
-    const mine = stale ? JSON.parse(JSON.stringify(Progress.data)) : null;
+    storeWorkspace();
+    const mine = JSON.parse(JSON.stringify(Progress.data));
     const work = await Sync.fetchWork(Progress.data.studentId);
-    Progress.load(stale ? mergeWork(work, mine) : work);
+    Progress.load(stale ? mergeWork(work, mine) : keepNewerPrograms(work, mine)); // a teacher change keeps the latest edits too
     Progress.dirty = stale;
     startSession(Progress.data, { quiet: true });
     if (stale) {
@@ -621,13 +623,24 @@ function mergeWork(server, mine) {
     if (!se) { out.exams[eid] = ex; continue; }
     for (const [cid, sl] of Object.entries(ex.slots || {})) {
       const ss = (se.slots = se.slots || {})[cid];
-      if (!ss || (sl.best !== null && !(ss.best >= sl.best))) se.slots[cid] = { ...(ss || {}), ...sl };
+      if (!ss || (sl.best !== null && !(ss.best >= sl.best))) se.slots[cid] = { ...(ss || {}), ...sl, ...(ss && String(ss.programAt || '') > String(sl.programAt || '') ? { program: ss.program, programAt: ss.programAt } : {}) };
+      else newerProgram(ss, sl);
     }
   }
   out.examQueue = [...(out.examQueue || []), ...(mine.examQueue || [])];
   out.current = mine.current;
   out.mode = mine.mode;
   return out;
+}
+// The programs only (not the statuses): what the student built since the last save stays in the editor
+function keepNewerPrograms(server, mine) {
+  for (const [id, m] of Object.entries(mine.challenges || {})) if (server.challenges[id]) newerProgram(server.challenges[id], m);
+  if (mine.free && server.free) newerProgram(server.free, mine.free);
+  for (const [eid, ex] of Object.entries(mine.exams || {})) {
+    const se = (server.exams || {})[eid];
+    if (se) for (const [cid, sl] of Object.entries(ex.slots || {})) if ((se.slots || {})[cid]) newerProgram(se.slots[cid], sl);
+  }
+  return server;
 }
 function onDeleted() {
   if (!Progress.data) return;
@@ -669,6 +682,11 @@ async function chooseModeNow(mode) {
   if (matches === null) { $('wError').textContent = 'The class server does not answer. Wait a few seconds and click again.'; return; }
   if (!matches.length) { startSession(Progress.create(name, cls, mode)); return; }
   matches.sort((a, b) => (b.validated || 0) - (a.validated || 0) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  const mine = Progress.restoreLocal();
+  if (matches[0].liveNow && !(mine && mine.studentId === matches[0].studentId)) {
+    $('wError').textContent = `${matches[0].name} is already open on another computer. If this is you, close the other window, wait 1 minute and try again.`;
+    return;
+  }
   try {
     const data = await Sync.fetchWork(matches[0].studentId);
     data.mode = mode;
@@ -681,6 +699,7 @@ async function openWorkFile(file) {
   try { startSession(Progress.load(JSON.parse(await file.text()))); } catch (e) { $('wError').textContent = 'Cannot open this file: ' + e.message; }
 }
 async function exitSession() {
+  if (App.exam && !CR.examOver) { toast('📝 You cannot leave during the exam. Ask your teacher.'); return; }
   storeWorkspace();
   const online = await Sync.push(liveState('left'), true);
   const saved = online || Progress.minutesSinceSave() < 0.5;
@@ -718,6 +737,7 @@ function setMode(mode, { initial = false } = {}) {
   $('challengeBox').hidden = mode !== 'challenge';
   if (mode === 'sandbox') {
     App.challenge = null;
+    $('stepBar').hidden = true;
     hideQuiz();
     loadSlot(Progress.data.free);
     $('projectName').readOnly = false;
@@ -760,6 +780,28 @@ function renderGuided() {
   $('btnHint').textContent = entry.hints ? '💡 Another hint' : '💡 Need a hint?';
   renderValidation();
   updateButtons();
+  renderStepBar();
+}
+// The bar of steps under the header: where the student is, what is done, and a click to go back to a step
+function renderStepBar() {
+  const bar = $('stepBar');
+  if (!Progress.data || App.mode !== 'challenge' || !App.challenge) { bar.hidden = true; return; }
+  const ids = App.exam ? App.exam.challenges : CHALLENGES.map((c) => c.id);
+  const state = (id) => {
+    if (App.exam) return examSlot(id).checks ? 'done' : 'todo';
+    const st = (Progress.data.challenges[id] || {}).status;
+    return st === 'validated' ? 'done' : st === 'locked' ? 'locked' : 'todo';
+  };
+  const done = ids.filter((id) => state(id) === 'done').length;
+  bar.innerHTML = `<span class="sb-count">${App.exam ? '📝' : '🧭'} <b>${done} / ${ids.length}</b> ${App.exam ? 'submitted' : 'done'}</span><div class="sb-steps">${ids.map((id, i) => {
+    const c = CHALLENGES.find((x) => x.id === id) || { title: id }, s = state(id), cur = App.challenge.id === id;
+    const label = c.quiz ? 'Quiz' : c.title;
+    const tip = s === 'locked' ? 'Pass the step before to open this one' : s === 'done' ? (App.exam ? 'Submitted' : 'Done') : 'To do';
+    return `${i ? '<span class="sb-line"></span>' : ''}<button class="sb-step ${s}${cur ? ' current' : ''}" data-ch="${esc(id)}" title="${esc(label)} · ${tip}"${s === 'locked' ? ' disabled' : ''}><span class="sb-n">${s === 'done' ? '✓' : s === 'locked' ? '🔒' : i + 1}</span><span class="sb-t">${esc(label)}</span></button>`;
+  }).join('')}</div>${App.exam ? '<span id="sbTimer" class="sb-timer"></span>' : ''}`;
+  bar.hidden = false;
+  if (App.exam) updateExamBanner();
+  bar.querySelectorAll('[data-ch]').forEach((b) => { b.onclick = () => { if (App.status === 'idle') enterChallenge(b.dataset.ch); }; });
 }
 function renderValidation() {
   const ch = App.challenge, entry = Progress.ch(ch.id);
@@ -799,11 +841,13 @@ function showQuiz(slot) {
   const ch = App.challenge;
   $('blocklyDiv').style.visibility = 'hidden';
   $('quizView').hidden = false;
+  document.body.classList.add('quiz-mode'); // no simulator nor download during a quiz: less to look at
   const answers = (slot && slot.answers) || [];
-  const marks = (slot && slot.quizMarks) || null;
+  const sent = !!App.exam && examSlot(ch.id).checks > 0; // in an exam the answers are sent once
+  const marks = (!App.exam && slot && slot.quizMarks) || null;
   $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)}</h2><p class="muted">${ch.description}</p>
-    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}</p>${q.options.map((o, k) => `<label class="${answers[i] === k ? 'picked' : ''}${marks && answers[i] === k ? (marks[i] ? ' right' : ' wrong') : ''}"><input type="radio" name="q${i}" value="${k}"${answers[i] === k ? ' checked' : ''}> ${esc(o)}</label>`).join('')}</div>`).join('')}
-    <div style="text-align:right;margin-top:10px"><button class="mc-btn green" id="quizCheck">✅ Check my answers</button></div></div>`;
+    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}</p>${q.options.map((o, k) => `<label class="${answers[i] === k ? 'picked' : ''}${marks && answers[i] === k ? (marks[i] ? ' right' : ' wrong') : ''}"><input type="radio" name="q${i}" value="${k}"${answers[i] === k ? ' checked' : ''}${sent ? ' disabled' : ''}> ${esc(o)}</label>`).join('')}</div>`).join('')}
+    <div style="text-align:right;margin-top:10px">${sent ? '<b>✅ Your answers are sent.</b>' : `<button class="mc-btn green" id="quizCheck">${App.exam ? '📨 Send my answers' : '✅ Check my answers'}</button>`}</div></div>`;
   $('quizView').querySelectorAll('input[type=radio]').forEach((r) => {
     r.onchange = () => {
       const s = workSlot();
@@ -816,9 +860,18 @@ function showQuiz(slot) {
       showQuiz(s);
     };
   });
-  $('quizCheck').onclick = evaluate;
+  if ($('quizCheck')) $('quizCheck').onclick = evaluate;
 }
-function hideQuiz() { $('quizView').hidden = true; $('blocklyDiv').style.visibility = ''; }
+function hideQuiz() { $('quizView').hidden = true; $('blocklyDiv').style.visibility = ''; document.body.classList.remove('quiz-mode'); }
+
+function confirmSend() {
+  return new Promise((done) => {
+    openModal(`<h2>📨 Send your answers?</h2><p>In the exam you can send your quiz answers <b>only once</b>. Check them before you send.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button id="qsNo">Not yet</button><button class="primary" id="qsYes">Send</button></div>`);
+    $('qsNo').onclick = () => { closeModal(); done(false); };
+    $('qsYes').onclick = () => { closeModal(); done(true); };
+  });
+}
 
 // ---------- Check my answer ----------
 async function evaluate() {
@@ -828,9 +881,10 @@ async function evaluate() {
   if (ch.quiz) {
     const answers = quizAnswers();
     if (ch.questions.some((q, i) => answers[i] === undefined || answers[i] === null)) { toast('Answer every question first.'); return; }
+    if (App.exam && !(await confirmSend())) return;
     res = gradeQuiz(ch, answers);
     const slot = workSlot();
-    slot.quizMarks = res.criteria.map((c) => c.ok);
+    if (!App.exam) slot.quizMarks = res.criteria.map((c) => c.ok);
     Progress.persist();
     showQuiz(slot);
   } else {
@@ -917,7 +971,7 @@ function liveState(status) {
 function updateButtons() {
   const busy = App.status !== 'idle';
   for (const id of ['btnEvaluate', 'btnHint']) $(id).disabled = busy;
-  $('btnEvaluate').textContent = busy ? '⏳ Checking…' : '✅ Check my answer';
+  $('btnEvaluate').textContent = App.exam ? (busy ? '⏳ Sending…' : '📨 Submit my program') : busy ? '⏳ Checking…' : '✅ Check my answer';
   $('stepper').querySelectorAll('button').forEach((b) => { b.disabled = busy; });
 }
 function updateSaveStatus() {
@@ -1142,7 +1196,7 @@ function init() {
   };
   requestAnimationFrame(frame);
   if (new URLSearchParams(location.search).get('preview')) startPreview(); else showWelcome();
-  if (location.hash.startsWith('#dev')) setTimeout(devHook, 600);
+  if (location.hash.startsWith('#dev') && (App.preview || ['localhost', '127.0.0.1'].includes(location.hostname))) setTimeout(devHook, 600);
 }
 // Development: index.html?preview=1#dev&cat=Input&ch=dice&prog=<url-encoded JSON>&view=js
 async function devHook() {

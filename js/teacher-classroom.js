@@ -111,10 +111,10 @@ function examDialog(c) {
     <p class="muted">The students of ${esc(c)} are switched to the exam at once (within a few seconds). Each challenge starts from an empty program. Only their best "Check my answer" counts; the score becomes a Swiss grade.</p>
     <div class="exam-form">
       <label>Title <input id="exTitle" value="Exam ${esc(c)} · ${esc(today)}"></label>
-      <label>Duration <input id="exMin" type="number" min="1" max="240" value="30" style="width:70px"> minutes</label>
+      <label>Duration <input id="exMin" type="number" min="1" max="240" value="40" style="width:70px"> minutes</label>
       <label><input type="checkbox" id="exHints"> Hints allowed</label>
       <div><b>Challenges</b>
-        <div class="exam-chs">${CATEGORIES.map((cat) => `<div class="exam-cat">${cat.icon} ${esc(cat.label)}</div>` + CHALLENGES.filter((ch) => ch.cat === cat.id).map((ch, i) => `<label><input type="checkbox" value="${esc(ch.id)}"${cat.id === 'u1' && i < 1 ? ' checked' : ''}> ${esc(ch.n + '. ' + ch.title)} <span class="muted">(${ch.quiz ? 'quiz' : esc(ch.lesson || '')})</span></label>`).join('')).join('')}</div>
+        <div class="exam-chs">${CATEGORIES.map((cat) => `<div class="exam-cat">${cat.icon} ${esc(cat.label)}</div>` + CHALLENGES.filter((ch) => ch.cat === cat.id).map((ch, i) => `<label><input type="checkbox" value="${esc(ch.id)}" checked> ${esc(ch.n + '. ' + ch.title)} <span class="muted">(${ch.quiz ? 'quiz' : esc(ch.lesson || '')})</span></label>`).join('')).join('')}</div>
       </div>
     </div>
     <div class="actions" style="justify-content:flex-end"><button onclick="closeModal()">Cancel</button><button class="primary" id="exStart">▶ Start the exam</button></div>`);

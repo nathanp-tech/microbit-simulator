@@ -81,7 +81,8 @@ async function startLive() {
     await refreshLive();
     clearInterval(T.liveTimer);
     // every 3 s with the class server, every 5 s online (database quota)
-    const loop = () => { T.liveTimer = setTimeout(async () => { await refreshLive(); loop(); }, T.hosted ? 5000 : 3000); };
+    // not while the tab is hidden: a dashboard left open in the background would use the database for nothing
+    const loop = () => { T.liveTimer = setTimeout(async () => { if (!document.hidden) await refreshLive(); loop(); }, T.hosted ? 5000 : 3000); };
     clearTimeout(T.liveTimer);
     loop();
   } catch (e) {
@@ -570,9 +571,24 @@ function watchSlots(work) {
     return [c.id, `${mark[e.status] || ''} ${c.n}. ${c.title}${c.quiz ? ' (quiz)' : ''}${cur}${has ? '' : ' (nothing yet)'}`];
   });
   slots.push(['free', `🛠️ Free programming${work.free && work.free.program ? '' : ' (no code yet)'}`]);
-  return slots;
+  // exams, most recent first: the slot is "<exam id>-<challenge id>", like their history
+  const exams = Object.entries(work.exams || {}).sort((a, b) => (b[1].startedAt || 0) - (a[1].startedAt || 0));
+  const ex = exams.flatMap(([eid, e]) => Object.entries(e.slots || {}).map(([cid, sl]) => {
+    const c = CHALLENGES.find((x) => x.id === cid);
+    return [eid + '-' + cid, `📝 ${e.title || 'Exam'} · ${c ? c.n + '. ' + c.title : cid}${sl.best !== null && sl.best !== undefined ? ' · best ' + sl.best + ' %' : ''}${sl.program || sl.answers ? '' : ' (nothing yet)'}`];
+  }));
+  return ex.concat(slots);
 }
-const watchedChallenge = () => CHALLENGES.find((c) => c.id === W.slot);
+// a slot of the watched work: a challenge, "free", or "<exam id>-<challenge id>"
+function watchSlot(work, slot) {
+  if (slot === 'free') return { entry: work.free, chId: null };
+  if (work.challenges[slot]) return { entry: work.challenges[slot], chId: slot };
+  for (const [eid, e] of Object.entries(work.exams || {})) {
+    if (slot && slot.startsWith(eid + '-')) { const cid = slot.slice(eid.length + 1); return { entry: (e.slots || {})[cid], chId: cid }; }
+  }
+  return { entry: null, chId: null };
+}
+const watchedChallenge = () => W.work && CHALLENGES.find((c) => c.id === watchSlot(W.work, W.slot).chId);
 
 async function refreshWatch(first) {
   if (!W.id || $('modal').hidden) return stopWatch();
@@ -584,11 +600,12 @@ async function refreshWatch(first) {
   $('wTitle').textContent = `${work.name}${work.className ? ' · ' + work.className : ''}`;
   $('wStatus').textContent = snap ? liveStatus(snap).text : '';
   const slots = watchSlots(work);
-  if (!W.slot) W.slot = work.mode === 'free' ? 'free' : work.current;
+  const liveExam = snap && snap.live && snap.live.exam;
+  if (!W.slot) W.slot = liveExam && liveExam.challenge ? liveExam.id + '-' + liveExam.challenge : work.mode === 'free' ? 'free' : work.current;
   const sel = $('wSlot');
   const html = slots.map(([v, l]) => `<option value="${esc(v)}"${v === W.slot ? ' selected' : ''}>${esc(l)}</option>`).join('');
   if (sel.innerHTML !== html) sel.innerHTML = html;
-  const entry = W.slot === 'free' ? work.free : work.challenges[W.slot];
+  const entry = watchSlot(work, W.slot).entry;
   const ch = watchedChallenge();
   if (ch && ch.quiz) { renderWatchQuiz(ch, entry); return; }
   $('watchQuiz').hidden = true;
@@ -632,7 +649,7 @@ function renderWatchQuiz(ch, entry) {
 function startWatchedBoard() {
   const ch = watchedChallenge();
   if (ch && ch.quiz) return;
-  const entry = watchProgram(W.slot === 'free' ? W.work.free : W.work.challenges[W.slot]);
+  const entry = watchProgram(watchSlot(W.work, W.slot).entry);
   if (!entry || !entry.program) { W.mb = null; W.view.setFeatures({}); return; }
   try {
     const prog = programFromState(entry.program);
@@ -647,7 +664,7 @@ function startWatchedBoard() {
 }
 function checkWatched() {
   const ch = watchedChallenge();
-  const entry = watchProgram(W.slot === 'free' ? W.work.free : W.work.challenges[W.slot]);
+  const entry = watchProgram(watchSlot(W.work, W.slot).entry);
   if (!ch || ch.quiz) { $('wResult').textContent = ch ? 'Quiz: see the answers on the left.' : 'Free programming has no check.'; return; }
   if (!entry || !entry.program) { $('wResult').textContent = 'No program yet.'; return; }
   const res = evaluateChallenge(ch, programFromState(entry.program));

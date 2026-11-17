@@ -26,7 +26,7 @@ const Progress = {
 
   create(name, className, mode) {
     const challenges = {};
-    CHALLENGES.forEach((c, i) => { challenges[c.id] = newChallengeEntry(i === 0 ? 'open' : 'locked'); });
+    CHALLENGES.forEach((c, i) => { challenges[c.id] = newChallengeEntry(i === 0 || c.quiz ? 'open' : 'locked'); });
     this.data = {
       app: 'microbit-simulator', type: 'mb-progress', version: 1,
       studentId: uid(), name, className, mode,
@@ -58,7 +58,7 @@ const Progress = {
     // the list of challenges can change: the first one, and every one after a passed one, are open
     CHALLENGES.forEach((c, i) => {
       const e = obj.challenges[c.id];
-      if (e.status === 'locked' && (i === 0 || obj.challenges[CHALLENGES[i - 1].id].status === 'validated')) e.status = 'open';
+      if (e.status === 'locked' && (i === 0 || c.quiz || obj.challenges[CHALLENGES[i - 1].id].status === 'validated')) e.status = 'open';
     });
     if (!CHALLENGES.some((c) => c.id === obj.current)) obj.current = CHALLENGES[0].id;
     this.data = obj;

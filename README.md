@@ -44,14 +44,16 @@ Made to fit in one 40-minute lesson: one challenge per key skill of the lesson p
 | 1 | 1 Introduction | Mood display | L2 | A happy, B sad, A+B another reaction | 4 min |
 | 2 | 2 Physical inputs | Electronic dice | L3 | 60 shakes: always 1 to 6, every face | 4 min |
 | 3 | 2 | Rock Paper Scissors | L4 | 3 pictures at random, variable + if / else if | 7 min |
-| 4 | 3 Sensors & variables | Step counter | L6 | 0 at start, +1 per shake, B resets | 6 min |
+| 4 | 3 Sensors & variables | Step counter | L6 | each shake adds 1 and shows the number, B resets to 0 | 6 min |
 | 5 | 4 Conditions | Night light | L7 | dark → all LEDs on, light → off, again and again | 5 min |
 | 6 | 4 | Reaction game | L8 | random wait, heart, reaction time, "too early" sad face | 8 min |
-| 7 | 1-4 | Quiz | Units 1-4 | 6 questions | 4 min |
+| 7 | 1-4 | Quiz | Units 1-4 | 6 questions, the topics of the lessons' mini-quiz: inputs / outputs, events, sensors, variables, if / else, time | 4 min |
 
 The other challenges written for the units (name tag, animation, gestures, score, sensor station, thermometer, progress bar, hot / cold, best time, one quiz per unit) were taken out to keep the lesson short; their reference solutions are still in `tests/solutions_src.js`.
 
 How a check works: the program runs on a fresh simulated micro:bit, in virtual time (a check takes a fraction of a second). A test script presses the buttons, shakes the board, changes the light, the temperature or the heading, then looks at what was shown (numbers, texts, icons, LED patterns). Each criterion gives points; the score is the share of points. Random numbers use fixed seeds, so a check always gives the same score. Quizzes: the wrong answers are shown in red, the right answer is not given.
+
+In an exam: the quiz answers are sent **once** and not marked on screen (no guessing by elimination); a student cannot leave the exam with *Exit*, and a name already open on another computer cannot be taken by a classmate (it frees itself 1 minute after that computer closes). A program that shows things by itself in a *forever* loop, without the button or the shake, scores 0 on the event challenges.
 
 Note for the reaction game: like in MakeCode, *show icon* waits 600 ms. A program that sets `start` after the heart (as in the lesson plan) measures 600 ms less and counts B as "too early" during those 600 ms; both orders are accepted by the check.
 
