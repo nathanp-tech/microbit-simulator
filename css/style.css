@@ -516,3 +516,38 @@ tr.away-row td { background: #fde7e9; }
 .mark-changed { font-weight: 800; color: #b4009e; }
 .q-marks { color: #6b7280; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .review-mission ul.steps { display: block; margin: 0; padding-left: 20px; } .review-mission .test-it { margin: 8px 0 0; }
+/* teacher: the exam of one student (every answer stacked) */
+.ev-top { position: sticky; top: -24px; z-index: 5; background: #fff; padding: 6px 0 8px; margin-top: -6px; border-bottom: 1px solid #e5e7eb; }
+.ev-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ev-head h2 { margin: 0; }
+.ev-total { font-size: 15px; background: #f0f3ff; border-radius: 14px; padding: 4px 12px; }
+.ev-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ev-nav a { font-size: 13px; background: #f6f7fb; border-radius: 12px; padding: 3px 10px; color: #333; text-decoration: none; }
+.ev-nav a:hover { background: #e8ecfb; }
+.ev-sec { padding: 14px 0 18px; border-bottom: 2px solid #eef0f4; scroll-margin-top: 110px; }
+.ev-sec-head { display: flex; align-items: baseline; justify-content: space-between; }
+.ev-sec-head h3 { margin: 0 0 8px; }
+.ev-sec-marks { font-size: 18px; font-weight: 800; color: #3454D1; }
+.ev-mission { background: #f6f7fb; border-radius: 8px; padding: 6px 12px; font-size: 13.5px; margin-bottom: 10px; }
+.ev-mission ul.steps { display: block; margin: 0; padding-left: 20px; }
+.ev-mission .test-it { margin: 4px 0 0; font-size: 12.5px; }
+.ev-mission .d-led { width: 24px; height: 24px; vertical-align: middle; }
+.ev-mission .d-text { display: inline-flex; gap: 2px; vertical-align: middle; }
+.ev-mission .d-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #3a3a3a; color: #fff; font-weight: 800; font-size: 11px; }
+.ev-grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start; }
+.ev-prog { border-radius: 8px; background: #f2f4f7; border: 1px solid #dde2ea; overflow: auto; max-width: 100%; }
+.ev-prog .blocklyMainBackground { fill: #f2f4f7 !important; stroke: none; }
+.ev-right { display: flex; flex-direction: column; gap: 8px; }
+.ev-board .sim-board-col { max-width: 260px; margin: 0 auto; }
+.ev-empty { color: #6b7280; font-weight: 600; }
+.ev-mark { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #fff8e6; border: 1px solid #f3dfa6; border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+.ev-mark input { width: 70px; font-size: 15px; font-weight: 700; }
+.ev-q { border-bottom: 1px dashed #e5e7eb; padding: 8px 0 12px; }
+.warn-box { background: #fff4ce; border: 1px solid #f3dfa6; border-radius: 8px; padding: 6px 10px; }
+.tnote { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #107c10; color: #fff; font-weight: 600; padding: 10px 18px; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 3000; }
+.curve-box { display: flex; gap: 20px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; background: #f6f7fb; border-radius: 10px; padding: 10px 14px; margin: 8px 0; }
+.curve-box label { margin-right: 10px; }
+.hist { display: flex; gap: 6px; align-items: flex-end; }
+.hbar { display: flex; flex-direction: column; align-items: center; width: 26px; font-size: 12px; }
+.hbar > div { width: 20px; background: #3454D1; border-radius: 4px 4px 0 0; min-height: 2px; }
+.hbar .hn { color: #555; height: 14px; }

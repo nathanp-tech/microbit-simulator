@@ -821,7 +821,9 @@ class Api:
             res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': exam.get('className'), 'updatedAt': time.time()})
             best = res.setdefault('challenges', {}).get(chid)
             score = max(0, min(100, int(data.get('score') or 0)))
-            if not best or score > best.get('score', -1):
+            # a quiz: the last answers sent count (the student may come back and change them); a program: the best one
+            is_quiz = isinstance(data.get('program'), dict) and bool(data['program'].get('quiz'))
+            if not best or score > best.get('score', -1) or is_quiz:
                 alts = ((best or {}).get('alts') or []) + ([{k: best.get(k) for k in ('score', 'program', 'robot')}] if best and best.get('program') else [])
                 res['challenges'][chid] = {'score': score, 'at': time.time(), 'program': data.get('program'), 'robot': data.get('robot'), 'checks': (best or {}).get('checks', 0) + 1,
                                            'alts': alts[-4:]}
@@ -937,6 +939,14 @@ class Api:
             exam = jload(self.r(['HGET', P + 'exams', eid])[0])
             if not exam:
                 return 404, {'error': 'no such exam'}
+            if action == 'curve':
+                # the bell curve of the grades out of 7: average grade and spread chosen by the teacher
+                mean, sd = float(data.get('mean')), float(data.get('sd'))  # ValueError → 400
+                if not (1 <= mean <= 7 and 0 <= sd <= 3):
+                    return 400, {'error': 'average 1 to 7, spread 0 to 3'}
+                exam['curve'] = {'mean': round(mean, 2), 'sd': round(sd, 2)}
+                self.r(['HSET', P + 'exams', eid, json.dumps(exam)])
+                return 200, {'ok': True, 'exam': exam}
             if action in ('stop', 'close'):
                 if not exam.get('stoppedAt'):
                     exam['stoppedAt'] = min(time.time(), exam['endsAt'])

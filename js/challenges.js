@@ -8,8 +8,8 @@ const CATEGORIES = [
   { id: 'test', icon: '📝', label: 'Test' },
 ];
 // the two tests of 40 minutes: the blank test (practice, no password) and the test (password of the class)
-const BLANK_TEST = ['faces', 'dice-dots', 'light-a', 'quiz-blank'];
-const REAL_TEST = ['temp-b', 'rps', 'compass', 'quiz-test'];
+const BLANK_TEST = ['quiz-blank', 'faces', 'dice-dots', 'light-a'];
+const REAL_TEST = ['quiz-test', 'temp-b', 'rps', 'compass'];
 // the exams the teacher can start (📝 Start an exam): add a new one here (its challenges must be in CHALLENGES)
 const EXAMS = [
   { id: 'blank', title: 'Blank exam', challenges: BLANK_TEST, minutes: 40, note: 'The practice exam: students can also start it alone with the 🧪 Blank test card.' },
@@ -136,8 +136,21 @@ function compassRound(make, heading) {
 const CHALLENGES = [
   // ---------------- 🧪 Blank test ----------------
   {
+    id: 'quiz-blank', cat: 'blank', level: 2, title: 'Quiz (blank test)', lesson: 'Units 1-4', quiz: true,
+    description: 'Six questions. Some show a program in blocks. You can come back and change your answers: the last ones you send count.',
+    skills: 'Units 1-4',
+    questions: [
+      { marks: 3, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
+      { marks: 1, q: 'Is button A an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
+      { marks: 1, q: 'Is the LED screen of the micro:bit an INPUT?', options: ['No, never', 'Yes: the LEDs also measure the light level', 'Yes: it detects the buttons', 'Only when it is off'], answer: 1 },
+      { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
+      { marks: 2, q: 'This program shows the light level. How can you make it show 0?', code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
+      { marks: 2, q: 'What does this program show?', code: QB.changeBy, options: ['2', '3', '5', '32'], answer: 2 },
+    ],
+  },
+  {
     id: 'faces', marks: 4, cat: 'blank', level: 1, title: 'Happy and sad', lesson: 'Unit 1',
-    description: '<ul class="steps"><li>Press [[btn:A]] → show icon <b>Happy</b> [[icon:Happy]]</li><li>Press [[btn:B]] → show icon <b>Sad</b> [[icon:Sad]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, then B on the board.</p>',
+    description: '<ul class="steps"><li>Press [[btn:A]] → a happy face [[icon:Happy]]</li><li>Press [[btn:B]] → a sad face [[icon:Sad]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, then B on the board.</p>',
     skills: 'on button A / B pressed, show icon',
     hints: ['Find "on button A pressed" in Input. Change A to B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
@@ -152,7 +165,7 @@ const CHALLENGES = [
   },
   {
     id: 'dice-dots', marks: 6, cat: 'blank', level: 2, title: 'Dice with dots', lesson: 'Unit 2',
-    description: `<ul class="steps"><li>[[shake]] → set the variable <b>roll</b> to <b>pick random 1 to 6</b></li><li><b>if / else if</b>: show the dots of the dice with <b>show leds</b> (one LED = one dot):<br>${DICE_FACES.map((f, i) => `${i + 1} [[img:${f}]]`).join(' &nbsp;')}</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> many times: do all six faces appear?</p>`,
+    description: `<ul class="steps"><li>[[shake]] → a dice face from <b>1 to 6</b> on the LED screen, with dots (one LED = one dot):<br>${DICE_FACES.map((f) => `[[img:${f}]]`).join(' ')}</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> many times: do all six faces appear?</p>`,
     skills: 'on shake, variables, pick random, if / else if, show leds',
     hints: ['Variables → Make a Variable… → roll. Then "set roll to pick random 1 to 6" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare "roll = 1", "roll = 2"… and put a "show leds" with the right dots in each part.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
@@ -168,7 +181,7 @@ const CHALLENGES = [
   },
   {
     id: 'light-a', marks: 4, cat: 'blank', level: 1, title: 'Light meter', lesson: 'Unit 3',
-    description: '<ul class="steps"><li>Press [[btn:A]] → <b>show number</b> of the <b>light level</b> (0 = dark, 255 = bright), for example [[text:9]][[text:0]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board), then press A.</p>',
+    description: '<ul class="steps"><li>Press [[btn:A]] → show the <b>light level</b> (from 0 = dark to 255 = bright)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board), then press A.</p>',
     skills: 'on button A pressed, light level, show number',
     hints: ['Put "show number" inside "on button A pressed".', 'Drag "light level" (Input) into the show number block.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
@@ -177,23 +190,23 @@ const CHALLENGES = [
       { label: 'A shows the light level (bright: 200)', points: 50, run: (make) => { const T = make().wait(1500); T.setLight(200); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(200); } },
     ],
   },
-  {
-    id: 'quiz-blank', cat: 'blank', level: 2, title: 'Quiz (blank test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. In the test you send your answers only once.',
-    skills: 'Units 1-4',
-    questions: [
-      { marks: 3, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
-      { marks: 1, q: 'Is button A an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
-      { marks: 1, q: 'Is the LED screen of the micro:bit an INPUT?', options: ['No, never', 'Yes: the LEDs also measure the light level', 'Yes: it detects the buttons', 'Only when it is off'], answer: 1 },
-      { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
-      { marks: 2, q: 'This program shows the light level. How can you make it show 0?', code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
-      { marks: 2, q: 'What does this program show?', code: QB.changeBy, options: ['2', '3', '5', '32'], answer: 2 },
-    ],
-  },
   // ---------------- 📝 Test ----------------
   {
+    id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
+    description: 'Six questions. Some show a program in blocks. You can come back and change your answers: the last ones you send count.',
+    skills: 'Units 1-4',
+    questions: [
+      { marks: 2, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
+      { marks: 1, q: 'Is the LED screen an output?', options: ['Yes: it shows pictures, numbers and text', 'No: it is only an input', 'No: it is a sensor', 'Only with the radio'], answer: 0 },
+      { marks: 2, q: 'What is a variable?', options: ['A box with a name that keeps a value; the value can change', 'A block that repeats forever', 'A sensor of the micro:bit', 'A picture on the LED screen'], answer: 0 },
+      { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
+      { marks: 2, q: 'This compass shows the wrong letter when you face East or West. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Swap the letters N and S', 'Change 45 to 90', 'Use the temperature instead of the compass heading'], answer: 0 },
+      { marks: 1, q: 'Is the temperature sensor an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
+    ],
+  },
+  {
     id: 'temp-b', marks: 4, cat: 'test', level: 1, title: 'Thermometer', lesson: 'Unit 3',
-    description: '<ul class="steps"><li>Press [[btn:B]] → <b>show number</b> of the <b>temperature</b> (°C), for example [[text:2]][[text:1]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>thermometer</b> on the board, then press B.</p>',
+    description: '<ul class="steps"><li>Press [[btn:B]] → show the <b>temperature</b> (°C)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>thermometer</b> on the board, then press B.</p>',
     skills: 'on button B pressed, temperature, show number',
     hints: ['Put "show number" inside "on button B pressed".', 'Drag "temperature (°C)" (Input) into the show number block.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
@@ -204,7 +217,7 @@ const CHALLENGES = [
   },
   {
     id: 'rps', marks: 6, cat: 'test', level: 2, title: 'Rock Paper Scissors', lesson: 'Unit 2',
-    description: '<ul class="steps"><li>[[shake]] → set the variable <b>choice</b> to <b>pick random 0 to 2</b></li><li><b>if / else if / else</b>:<br>0 → rock [[icon:SmallSquare]] &nbsp; 1 → paper [[icon:Square]] &nbsp; 2 → scissors [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
+    description: '<ul class="steps"><li>[[shake]] → show <b>rock</b>, <b>paper</b> or <b>scissors</b> at random on the LED screen, for example [[icon:SmallSquare]] [[icon:Square]] [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
     skills: 'variables, pick random, if / else if',
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
@@ -213,13 +226,13 @@ const CHALLENGES = [
       return [
         { label: 'A picture appears after every shake', points: 30, run: (make) => { const s = shakes(make); return s.filter(Boolean).length / s.length >= 0.95 ? 1 : 0.5 * s.filter(Boolean).length / s.length; } },
         { label: 'Three different pictures can appear (rock, paper, scissors)', points: 40, run: (make) => { const d = distinct(shakes(make).filter(Boolean)).length; return d === 3 ? 1 : d === 2 ? 0.4 : d > 3 ? 0.5 : 0; } },
-        { label: 'Uses a variable, pick random and if / else', points: 30, always: true, run: (make, p) => ['variables_set', 'math_random', 'controls_if'].filter((t) => (p.blockTypes || []).includes(t)).length / 3 },
+        { label: 'Uses pick random and if / else', points: 30, always: true, run: (make, p) => ['math_random', 'controls_if'].filter((t) => (p.blockTypes || []).includes(t)).length / 2 },
       ];
     })(),
   },
   {
     id: 'compass', marks: 5, cat: 'test', level: 2, title: 'Compass', lesson: 'Unit 4',
-    description: '<ul class="steps"><li><b>forever</b>: look at the <b>compass heading</b> (0 to 359°)</li><li><b>if / else if</b>: show the letter of the direction with <b>show string</b>:<br>less than 45 → [[text:N]] &nbsp; less than 135 → [[text:E]] &nbsp; less than 225 → [[text:S]] &nbsp; less than 315 → [[text:W]] &nbsp; else → [[text:N]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>logo</b> at the top of the board round and round: the heading changes (shown on the logo). Watch the letter.</p>',
+    description: '<ul class="steps"><li>Always show where the micro:bit points: <b>N</b>, <b>E</b>, <b>S</b> or <b>W</b> [[text:N]] [[text:E]] [[text:S]] [[text:W]]</li><li>N = 0°, E = 90°, S = 180°, W = 270° (compass heading)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>logo</b> at the top of the board round and round: the heading changes (shown on the logo). Watch the letter.</p>',
     skills: 'forever, compass heading, if / else if, comparison',
     hints: ['forever → if (compass heading < 45) then show string "N", else if (compass heading < 135) then show string "E"…', 'Click ⊕ on the if block to add the "else if" parts. The last part (else) shows "N" again.'],
     tests: [
@@ -228,19 +241,6 @@ const CHALLENGES = [
       { label: 'Heading 180° shows S', points: 20, run: (make) => compassRound(make, 180) === 'S' },
       { label: 'Heading 270° shows W', points: 20, run: (make) => compassRound(make, 270) === 'W' },
       { label: 'Heading 350° shows N', points: 20, run: (make) => compassRound(make, 350) === 'N' },
-    ],
-  },
-  {
-    id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. You send your answers only once.',
-    skills: 'Units 1-4',
-    questions: [
-      { marks: 2, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
-      { marks: 1, q: 'Is the LED screen an output?', options: ['Yes: it shows pictures, numbers and text', 'No: it is only an input', 'No: it is a sensor', 'Only with the radio'], answer: 0 },
-      { marks: 2, q: 'What is a variable?', options: ['A box with a name that keeps a value; the value can change', 'A block that repeats forever', 'A sensor of the micro:bit', 'A picture on the LED screen'], answer: 0 },
-      { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
-      { marks: 2, q: 'This compass shows the wrong letter when you face East or West. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Swap the letters N and S', 'Change 45 to 90', 'Use the temperature instead of the compass heading'], answer: 0 },
-      { marks: 1, q: 'Is the temperature sensor an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
     ],
   },
 ];

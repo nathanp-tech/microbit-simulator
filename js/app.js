@@ -890,16 +890,17 @@ function showQuiz(slot) {
   $('quizView').hidden = false;
   document.body.classList.add('quiz-mode'); // no simulator during a quiz: less to look at
   const answers = (slot && slot.answers) || [];
-  const sent = !!App.exam && examSlot(ch.id).checks > 0; // in an exam the answers are sent once
+  const sent = !!App.exam && examSlot(ch.id).checks > 0; // already sent once: they can change them and send again (the last answers count)
+  const locked = !!App.exam && CR.examOver;
   const marks = (!App.exam && slot && slot.quizMarks) || null;
   const option = (q, i, o, k) => {
     const picked = quizPicked(q, answers[i], k);
     const mark = marks && picked ? (marks[i] ? ' right' : ' wrong') : '';
-    return `<label class="${picked ? 'picked' : ''}${mark}"><input type="${q.multi ? 'checkbox' : 'radio'}" name="q${i}" value="${k}"${picked ? ' checked' : ''}${sent ? ' disabled' : ''}> ${esc(o)}</label>`;
+    return `<label class="${picked ? 'picked' : ''}${mark}"><input type="${q.multi ? 'checkbox' : 'radio'}" name="q${i}" value="${k}"${picked ? ' checked' : ''}${locked ? ' disabled' : ''}> ${esc(o)}</label>`;
   };
   $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)} <span class="q-marks">· ${chMarks(ch)} marks</span></h2><p class="muted">${ch.description}</p>
     ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="q-marks">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
-    <div style="text-align:right;margin-top:10px">${sent ? '<b>✅ Your answers are sent.</b>' : `<button class="mc-btn green" id="quizCheck">${App.exam ? '📨 Send my answers' : '✅ Check my answers'}</button>`}</div></div>`;
+    <div style="text-align:right;margin-top:10px">${locked ? '' : `${sent ? '<span class="muted">✅ Sent. You can change your answers and send them again: the last ones count.</span> ' : ''}<button class="mc-btn green" id="quizCheck">${App.exam ? (sent ? '📨 Send my answers again' : '📨 Send my answers') : '✅ Check my answers'}</button>`}</div></div>`;
   renderQuizCode($('quizView'), ch.questions);
   $('quizView').querySelectorAll('input[type=radio], input[type=checkbox]').forEach((r) => {
     r.onchange = () => {
@@ -920,14 +921,6 @@ function showQuiz(slot) {
 }
 function hideQuiz() { $('quizView').hidden = true; $('blocklyDiv').style.visibility = ''; document.body.classList.remove('quiz-mode'); }
 
-function confirmSend() {
-  return new Promise((done) => {
-    openModal(`<h2>📨 Send your answers?</h2><p>In the exam you can send your quiz answers <b>only once</b>. Check them before you send.</p>
-      <div style="display:flex;gap:8px;justify-content:flex-end"><button id="qsNo">Not yet</button><button class="primary" id="qsYes">Send</button></div>`);
-    $('qsNo').onclick = () => { closeModal(); done(false); };
-    $('qsYes').onclick = () => { closeModal(); done(true); };
-  });
-}
 
 // ---------- Check my answer ----------
 async function evaluate() {
@@ -937,7 +930,6 @@ async function evaluate() {
   if (ch.quiz) {
     const answers = quizAnswers();
     if (ch.questions.some((q, i) => !quizAnswered(q, answers[i]))) { toast('Answer every question first.'); return; }
-    if (App.exam && !(await confirmSend())) return;
     res = gradeQuiz(ch, answers);
     const slot = workSlot();
     if (!App.exam) slot.quizMarks = res.criteria.map((c) => c.ok);

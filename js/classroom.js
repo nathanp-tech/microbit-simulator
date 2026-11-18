@@ -277,7 +277,7 @@ function renderExam() {
   $('btnHint').hidden = slot.hints >= hints.length;
   $('btnHint').textContent = `💡 Hint (${slot.hints + 1}/${hints.length})`;
   $('btnEvaluate').hidden = CR.examOver || !!ch.quiz;
-  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">${slot.checks ? '✅ Your answers are sent.' : 'Answer every question, then click <b>📨 Send my answers</b> (only once).'}</div>`
+  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">${slot.checks ? '✅ Your answers are sent. You can still change them and send them again.' : 'Answer every question, then click <b>📨 Send my answers</b>.'}</div>`
     : `<div class="exam-note">${slot.checks ? '✅ <b>Submitted.</b> Improved it? Test it, then submit again.' : 'Test it in the simulator. When it works, submit it.'}</div>`;
   updateButtons();
   renderStepBar();
@@ -374,7 +374,7 @@ function showExamEnd(handedIn) {
       const got = its.reduce((a, it) => a + it.mark, 0), max = its.reduce((a, it) => a + it.max, 0);
       return `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? `${fm(got)} / ${fm(max)}` : `— / ${fm(max)} (nothing submitted)`}</b></td></tr>`;
     }).join('');
-    $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Total</b></td><td><b>${fm(sheet.total)} / ${fm(sheet.max)} marks · grade ${sheet.grade.toFixed(1)}</b></td></tr></table>
+    $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Total</b></td><td><b>${fm(sheet.total)} / ${fm(sheet.max)} marks (${sheet.pct} %)</b></td></tr></table>
       <p class="muted">This was a practice test. In the real test, your teacher gives you the password.</p><button class="primary" id="blankHome">🏠 Back to the home page</button>`;
     $('examOverlay').hidden = false;
     $('blankHome').onclick = goHome;
@@ -427,7 +427,8 @@ function submitForgotten() {
     try {
       let res, program;
       if (ch.quiz) {
-        if (slot.checks || !(slot.answers || []).some((a) => a !== null && a !== undefined)) continue;
+        if (!(slot.answers || []).some((a) => a !== null && a !== undefined)) continue;
+        if (slot.checks && JSON.stringify(slot.answers) === JSON.stringify((slot.sentProgram || {}).answers)) continue;
         program = { quiz: true, answers: slot.answers };
         res = gradeQuiz(ch, slot.answers);
       } else {

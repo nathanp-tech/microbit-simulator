@@ -131,6 +131,8 @@ s, r = call('POST', '/api/exam/join', {'testCode': TCODE, 'studentId': A, 'name'
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c1', 'score': 60, 'program': {'a': 1}}); check(r.get('best') == 60, 'exam result')
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c1', 'score': 40, 'program': {'a': 2}}); check(r.get('best') == 60, 'best score kept')
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c9', 'score': 100}); check(s == 404, 'challenge outside the exam refused')
+call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c2', 'score': 80, 'program': {'quiz': True, 'answers': [1]}})
+s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c2', 'score': 50, 'program': {'quiz': True, 'answers': [2]}}); check(r.get('best') == 50, 'quiz: the last answers count (not the best)', r)
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1', 'marks': 3}); check(s in (401, 403), 'a student cannot change marks')
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c2#1', 'marks': 1.5}, teacher=True); check(s == 200 and r['marks'] == {'c2#1': 1.5}, 'teacher changes a mark')
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c2#1', 'marks': None}, teacher=True); check(s == 200 and r['marks'] == {}, 'back to the automatic mark')

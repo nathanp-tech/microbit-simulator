@@ -51,6 +51,12 @@ The welcome page has two choices only:
 
 **Marks:** each part has its marks, shown to the students (challenge: `marks` in `js/challenges.js`, quiz question: `marks`); both exams are out of 25. The automatic mark is the check score × the marks (or the answer of the question), rounded to half marks; the grade is the Swiss scale from the total. Results → **✏️ Mark question by question**: one question at a time, every student's program (in blocks) or answer, the automatic mark, and a field to change it (↺ auto goes back). The live view shows each student's marks and grade for the latest exam of their class (updated when you change a mark); click it for the results.
 
+**Grade out of 7 (bell curve per class):** each student's total is placed against the class (z = (total − class average) / standard deviation), then put on a normal curve of an average grade and a spread you choose in the results (default 4.5 and 1.2), rounded between 1 and 7; a histogram shows the grades of the class. Click a student's name, total or grade (or their grade in the live view) to see **all their answers stacked** — quiz answers, programs in blocks running on a micro:bit, the automatic check — with each mark that you can change.
+
+**Backups on this computer:** when an exam ends (time over or stopped), the open dashboard downloads one JSON file with the exam and every result (programs, answers, marks, grades). 💾 saves one at any time; *Exams & results → 📂 Open a backup file* shows the results from such a file if the database has a problem.
+
+**Quiz:** the quiz comes first; students can come back, change their answers and send them again (the last answers count).
+
 **Start an exam** lets you choose an exam of `EXAMS` (`js/challenges.js`: Blank exam, Exam 1…) and **👁 Preview** it: every part, its marks, the mission, the quiz questions with the right answers.
 
 Quiz questions can show a program drawn with the real MakeCode blocks (`code:` in `js/challenges.js`) and can have several right answers (`multi: true`: +1 per right tick, −1 per wrong tick, never below 0).

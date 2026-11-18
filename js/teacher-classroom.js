@@ -169,8 +169,22 @@ async function examsList() {
     ${d.exams.length ? `<table class="cls"><thead><tr><th>Exam</th><th>Class</th><th>Date</th><th>Challenges</th><th>State</th><th></th></tr></thead><tbody>
     ${d.exams.map((e) => `<tr><td><b>${esc(e.title)}</b></td><td>${esc(e.className)}</td><td>${new Date(e.startedAt * 1000).toLocaleString()}</td><td>${e.challenges.length} · ${e.minutes} min${e.hints ? ' · hints' : ''}</td>
       <td>${!e.stoppedAt && d.now < e.endsAt ? '⏱ running' : 'finished'}</td>
-      <td style="white-space:nowrap"><button class="mini primary" data-exres="${esc(e.id)}">Results</button> <button class="mini danger" data-exdel="${esc(e.id)}">🗑</button></td></tr>`).join('')}</tbody></table>`
-    : '<p class="muted">No exam yet. Start one from the header of a class in the live view (📝 Start an exam).</p>'}`);
+      <td style="white-space:nowrap"><button class="mini primary" data-exres="${esc(e.id)}">Results</button> <button class="mini" data-exsave="${esc(e.id)}" title="Save everything of this exam on this computer">💾</button> <button class="mini danger" data-exdel="${esc(e.id)}">🗑</button></td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">No exam yet. Start one from the header of a class in the live view (📝 Start an exam).</p>'}
+    <div class="actions"><label class="mini-file"><input type="file" id="exOpenFile" accept=".json" hidden><button id="exOpenBtn" title="If the database has a problem: open a backup saved on this computer">📂 Open a backup file</button></label>
+      <span class="muted">A backup is saved on this computer at the end of each exam (while this dashboard is open).</span></div>`);
+  document.querySelectorAll('[data-exsave]').forEach((b) => { b.onclick = () => backupExam(b.dataset.exsave); });
+  $('exOpenBtn').onclick = () => $('exOpenFile').click();
+  $('exOpenFile').onchange = async (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!d.exam || !Array.isArray(d.results)) throw new Error('this is not an exam backup');
+      X.exam = d.exam; X.results = d.results; X.verified = {}; X.now = d.savedAt || Date.now() / 1000; X.fromFile = f.name;
+      renderExamResults();
+    } catch (err) { alert('Cannot open this file: ' + err.message); }
+  };
   document.querySelectorAll('[data-exres]').forEach((b) => { b.onclick = () => examResults(b.dataset.exres); });
   document.querySelectorAll('[data-exdel]').forEach((b) => {
     b.onclick = async () => { if (confirm('Delete this exam and its results?')) { await tpost('api/exam', { action: 'delete', examId: b.dataset.exdel }); examsList(); } };
@@ -178,10 +192,50 @@ async function examsList() {
 }
 const X = { exam: null, results: [], verified: {} };
 const awayCell = (r) => (!r.away || !r.away.n ? '<span class="muted">—</span>' : `<span class="away-n">⚠️ ${r.away.n}× · ${fmtTime(Math.round(r.away.ms / 1000))}</span>`);
+// ---------- 💾 Backup on this computer: the exam and every result (programs, answers, marks), as one JSON file ----------
+async function backupExam(id, auto = false) {
+  const d = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(id))).json();
+  if (!d.exam) { if (!auto) alert('Exam not found.'); return false; }
+  const g7 = examGrades(d.exam, d.results);
+  const rows = d.results.map((r) => ({ name: r.name, ...markSheet(d.exam.challenges, r), grade: g7[r.studentId] }));
+  const file = { type: 'mb-exam-backup', savedAt: Date.now() / 1000, exam: d.exam, results: d.results,
+    marks: rows.map((r) => ({ name: r.name, total: r.total, max: r.max, grade: r.grade, items: r.items.map((it) => ({ key: it.key, mark: it.mark, max: it.max, changed: it.changed })) })) };
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 1)], { type: 'application/json' }));
+  a.download = `exam-backup_${slugName(d.exam.className)}_${slugName(d.exam.title)}_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
+// a short note at the bottom of the dashboard
+function tnote(msg, ms = 8000) {
+  const n = document.createElement('div');
+  n.className = 'tnote';
+  n.textContent = msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), ms);
+}
+// at the end of an exam (time over or stopped), once the late results are in: one backup, automatically
+const SAVED_KEY = 'mbsim.examBackups';
+async function autoBackupExams() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch (e) { /* none */ }
+  for (const ctl of Object.values(T.classctl || {})) {
+    const ex = ctl && ctl.exam;
+    if (!ex || !ex.id || saved.includes(ex.id)) continue;
+    const end = ex.stoppedAt || ex.endsAt;
+    if (!(T.serverNow > end + 100)) continue; // the results of the last seconds arrive within 90 s
+    saved.push(ex.id);
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved.slice(-100))); } catch (e) { /* private window */ }
+    if (await backupExam(ex.id, true)) tnote(`💾 Exam backup saved on this computer (Downloads): ${ex.title} · ${ex.className}`);
+  }
+}
 async function examResults(id) {
   const d = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(id))).json();
   if (!d.exam) { alert('Exam not found.'); return; }
-  X.exam = d.exam; X.results = d.results; X.verified = {}; X.now = d.now;
+  X.exam = d.exam; X.results = d.results; X.verified = {}; X.now = d.now; X.fromFile = null;
   renderExamResults();
 }
 // a result with the replayed scores (Verify) in place of the scores sent by the browsers
@@ -197,7 +251,8 @@ function examRows() {
   const e = X.exam, names = (teacherRoster()[e.className] || []).slice();
   const rows = names.map((n) => X.results.find((r) => nkey(r.name) === nkey(n) && nkey(r.className) === nkey(e.className)) || { name: n, className: e.className, challenges: {}, missing: true });
   for (const r of X.results) if (!rows.includes(r)) rows.push(r);
-  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((r) => ({ r, sheet: markSheet(e.challenges, verifiedResult(r)) }));
+  const g7 = examGrades(e, X.results.map(verifiedResult));
+  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((r) => ({ r, sheet: markSheet(e.challenges, verifiedResult(r)), g7: r.studentId ? g7[r.studentId] : undefined }));
 }
 const fmtMark = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 // the work of one student in one test, to open it in the student view (program and board, or the quiz answers)
@@ -211,25 +266,42 @@ function renderExamResults() {
   const e = X.exam, rows = examRows();
   const items = examItems(e.challenges), max = items.reduce((a, i) => a + i.max, 0);
   const running = !e.stoppedAt && X.now < e.endsAt;
+  const curve = { ...CURVE_DEFAULT, ...(e.curve || {}) };
+  const graded = rows.filter((x) => x.g7 !== undefined);
+  const hist = [1, 2, 3, 4, 5, 6, 7].map((g) => graded.filter((x) => x.g7 === g).length), hmax = Math.max(1, ...hist);
+  const avgMarks = graded.length ? graded.reduce((a, x) => a + x.sheet.total, 0) / graded.length : 0;
   openModal(`<h2>📝 ${esc(e.title)} · ${esc(e.className)}</h2>
-    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min · ${running ? '⏱ still running' : 'finished'} · marks given automatically (✎ = changed by you) · grade = Swiss scale from the total.</p>
+    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min · ${running ? '⏱ still running' : 'finished'} · marks given automatically (✎ = changed by you).</p>
+    <div class="curve-box"><div><b>Grade out of 7: a bell curve for the class</b><div class="muted">Each total is placed against the class (class average ${fmtMark(Math.round(avgMarks * 10) / 10)} / ${fmtMark(max)} marks), then on a curve of:</div>
+        <label>average grade <input type="number" id="cvMean" min="1" max="7" step="0.1" value="${curve.mean}" style="width:64px"></label>
+        <label>spread <input type="number" id="cvSd" min="0" max="3" step="0.1" value="${curve.sd}" style="width:64px"></label>
+        <button class="mini" id="cvReset" title="Average 4.5, spread 1.2">Default</button><span id="cvMsg" class="muted"></span></div>
+      <div class="hist">${hist.map((n, i) => `<div class="hbar"><span class="hn">${n || ''}</span><div style="height:${Math.round(n / hmax * 60)}px"></div><b>${i + 1}</b></div>`).join('')}</div></div>
     <div class="actions"><button class="primary" id="exReview" title="Go through the questions one by one and change the marks">✏️ Mark question by question</button>
       <button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying</button>
-      <button id="exCsv">📊 CSV</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
-    <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade</th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
-    ${rows.map(({ r, sheet }) => `<tr${r.missing ? ' class="absent"' : ''}><td><b>${esc(r.name)}</b>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
+      <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
+    ${X.fromFile ? `<p class="warn-box">📂 Opened from the backup file <b>${esc(X.fromFile)}</b>: changing a mark needs the database.</p>` : ''}
+    <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade<br><span class="muted">/7</span></th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
+    ${rows.map(({ r, sheet, g7 }) => `<tr${r.missing ? ' class="absent"' : ''}><td>${r.missing ? `<b>${esc(r.name)}</b> <span class="muted">no result</span>` : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="See the whole exam of this student"><b>${esc(r.name)}</b></button>`}</td>
       ${sheet.items.map((it) => (!it.submitted && !it.changed ? '<td class="muted">—</td>'
     : `<td><button class="linklike${it.changed ? ' mark-changed' : ''}" data-exview="${esc(r.studentId)}:${esc(it.chId)}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : 'Automatic mark'} · click to see the work">${fmtMark(it.mark)}${it.changed ? ' ✎' : ''}</button></td>`)).join('')}
-      <td><b>${r.missing ? '—' : fmtMark(sheet.total)}</b></td><td><b class="grade">${r.missing ? '—' : sheet.grade.toFixed(1)}</b></td>
+      <td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b>${fmtMark(sheet.total)}</b></button>`}</td><td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b class="grade">${g7 === undefined ? '—' : g7}</b></button>`}</td>
       <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
       <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table></div>`);
   $('modal').querySelector('.modal-box').style.maxWidth = '1400px';
-  $('exRefresh').onclick = () => examResults(e.id);
+  $('exRefresh').onclick = () => (X.fromFile ? renderExamResults() : examResults(e.id));
+  $('exSave').onclick = () => backupExam(e.id);
+  const setCurve = async (mean, sd) => {
+    if (X.fromFile) { e.curve = { mean, sd }; return renderExamResults(); }
+    try { const d = await tpost('api/exam', { action: 'curve', examId: e.id, mean, sd }); X.exam = d.exam; renderExamResults(); refreshGrades(true); } catch (err) { $('cvMsg').textContent = err.message; }
+  };
+  $('cvMean').onchange = $('cvSd').onchange = () => setCurve(Number($('cvMean').value), Number($('cvSd').value));
+  $('cvReset').onclick = () => setCurve(CURVE_DEFAULT.mean, CURVE_DEFAULT.sd);
   $('exReview').onclick = () => renderReview(0);
   document.querySelectorAll('[data-review]').forEach((b) => { b.onclick = () => renderReview(Number(b.dataset.review)); });
   $('exCsv').onclick = () => {
-    const head = ['Class', 'Student', ...items.map((it) => `${it.short} (/${it.max})`), `Total (/${max})`, 'Grade', 'Handed in', 'Left the page (times)', 'Away (seconds)'];
-    const lines = [head].concat(rows.map(({ r, sheet }) => [e.className, r.name, ...sheet.items.map((it) => it.mark), sheet.total, r.missing ? '' : sheet.grade,
+    const head = ['Class', 'Student', ...items.map((it) => `${it.short} (/${it.max})`), `Total (/${max})`, 'Percent', 'Grade (/7)', 'Handed in', 'Left the page (times)', 'Away (seconds)'];
+    const lines = [head].concat(rows.map(({ r, sheet, g7 }) => [e.className, r.name, ...sheet.items.map((it) => it.mark), sheet.total, sheet.pct, g7 === undefined ? '' : g7,
       r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString() : '', r.away ? r.away.n : '', r.away ? Math.round(r.away.ms / 1000) : '']));
     const csv = '﻿' + lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
     const a = document.createElement('a');
@@ -239,12 +311,126 @@ function renderExamResults() {
   };
   $('exVerify').onclick = verifyExam;
   document.querySelectorAll('[data-exview]').forEach((b) => {
-    b.onclick = () => {
-      const [sid, cid] = b.dataset.exview.split(':');
-      const r = X.results.find((x) => x.studentId === sid);
-      if (r) watchStudent('exam-' + sid, { slot: cid, work: examWork(r, cid) });
+    b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); examViewer(sid, Math.max(0, e.challenges.indexOf(cid))); };
+  });
+  document.querySelectorAll('[data-exstudent]').forEach((b) => { b.onclick = () => examViewer(b.dataset.exstudent, 0); });
+}
+
+// the teacher changes one mark (null = back to the automatic mark)
+async function saveMark(sid, key, marks, el) {
+  const r = X.results.find((x) => x.studentId === sid);
+  try {
+    const d = await tpost('api/exam/mark', { examId: X.exam.id, studentId: sid, key, marks, name: r && r.name });
+    if (r) r.marks = d.marks;
+    if (el) { el.textContent = '✓ saved'; setTimeout(() => { el.textContent = ''; }, 1500); }
+    refreshGrades(true);
+  } catch (err) { alert('Not saved: ' + err.message); }
+}
+
+// ---------- 👁 The exam of one student: every answer stacked, with its mark that the teacher can change ----------
+const EVW = { boards: [], ws: [] };
+function stopExamViewer() {
+  if (EVW.raf) cancelAnimationFrame(EVW.raf);
+  EVW.raf = null;
+  EVW.boards = [];
+  while (EVW.ws.length) { try { EVW.ws.pop().dispose(); } catch (e) { /* gone */ } }
+}
+function examViewer(sid, part = 0, back = renderExamResults) {
+  stopWatch();
+  stopExamViewer();
+  const e = X.exam, list = examRows().filter(({ r }) => !r.missing);
+  const idx = list.findIndex(({ r }) => r.studentId === sid);
+  if (idx < 0) return back();
+  const { r, sheet, g7 } = list[idx];
+  const partMarks = (id) => { const its = sheet.items.filter((it) => it.chId === id); return { got: its.reduce((a, it) => a + it.mark, 0), max: its.reduce((a, it) => a + it.max, 0), sent: its.some((it) => it.submitted), changed: its.some((it) => it.changed) }; };
+  const markRow = (it) => `<div class="ev-mark"><span>Automatic: <b>${fmtMark(it.auto)}</b> / ${fmtMark(it.max)}</span>
+      <label>Mark <input type="number" class="ev-in" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}"> / ${fmtMark(it.max)}</label>
+      ${it.changed ? `<button class="mini" data-evauto="${esc(it.key)}" title="Back to the automatic mark">↺ auto</button> <span class="mark-changed">✎ changed by you</span>` : ''}</div>`;
+  const section = (cid, i) => {
+    const ch = CHALLENGES.find((k) => k.id === cid), c = (r.challenges || {})[cid], m = partMarks(cid);
+    const head = `<div class="ev-sec-head"><h3>${i + 1}. ${ch ? (ch.quiz ? '❓ ' : '') + esc(ch.title) : esc(cid)}</h3><span class="ev-sec-marks">${m.sent || m.changed ? fmtMark(m.got) : '—'} / ${fmtMark(m.max)}${m.changed ? ' ✎' : ''}</span></div>`;
+    if (!ch) return `<section class="ev-sec" id="ev-${i}">${head}<p class="muted">This part is no longer in the app: it cannot be shown.</p></section>`;
+    if (ch.quiz) {
+      const answers = (c && c.program && c.program.answers) || [];
+      return `<section class="ev-sec" id="ev-${i}">${head}${c ? '' : '<p class="muted">No answers sent.</p>'}${ch.questions.map((q, k) => {
+        const it = sheet.items.find((x) => x.key === `${cid}#${k}`);
+        return `<div class="ev-q"><p><b>${k + 1}. ${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-evq="${esc(cid)}:${k}"></div>` : ''}
+          ${q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
+          ${markRow(it)}</div>`;
+      }).join('')}</section>`;
+    }
+    const it = sheet.items.find((x) => x.key === cid);
+    return `<section class="ev-sec" id="ev-${i}">${head}<div class="ev-mission">${richDesc(ch.description)}</div>
+      ${c && c.program ? `<div class="ev-grid"><div class="ev-prog" data-evp="${esc(cid)}"></div>
+        <div class="ev-right"><div class="mc-boards ev-board" data-evb="${esc(cid)}" style="padding:0"></div>
+          <div class="actions"><button class="mini" data-evrun="${esc(cid)}" title="Start their program again">↻ Restart</button><span class="muted">${c.checks || 1} submission${(c.checks || 1) > 1 ? 's' : ''}${c.at ? ' · last ' + new Date(c.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
+          <div class="ev-crit" data-evc="${esc(cid)}"></div></div></div>` : '<p class="ev-empty">Nothing submitted for this part.</p>'}
+      ${markRow(it)}</section>`;
+  };
+  const nav = e.challenges.map((cid, i) => { const ch = CHALLENGES.find((k) => k.id === cid), m = partMarks(cid); return `<a href="#ev-${i}" data-evgo="${i}">${ch ? (ch.quiz ? 'Quiz' : esc(ch.title)) : esc(cid)} <b>${m.sent || m.changed ? fmtMark(m.got) : '—'}/${fmtMark(m.max)}</b></a>`; }).join('');
+  openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
+      <h2>${esc(r.name)} <span class="muted">· ${esc(e.title)}</span></h2><span style="flex:1"></span>
+      <span class="ev-total">${fmtMark(sheet.total)} / ${fmtMark(sheet.max)} · grade <b>${g7 === undefined ? '—' : g7} / 7</b></span>
+      <button id="evPrev"${idx ? '' : ' disabled'} title="Previous student">‹ Previous</button><span class="muted">${idx + 1} / ${list.length}</span><button id="evNext"${idx < list.length - 1 ? '' : ' disabled'} title="Next student">Next ›</button></div>
+      <nav class="ev-nav">${nav}</nav></div>
+    <div class="ev-body">${e.challenges.map(section).join('')}</div>`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
+  const box = $('modal').querySelector('.modal-box');
+  $('evBack').onclick = () => { stopExamViewer(); back(); };
+  $('evPrev').onclick = () => examViewer(list[idx - 1].r.studentId, 0, back);
+  $('evNext').onclick = () => examViewer(list[idx + 1].r.studentId, 0, back);
+  document.querySelectorAll('[data-evgo]').forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); const t = $('ev-' + a.dataset.evgo); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }; });
+  // marks: saved at once, the page shows the new totals (same place on the page)
+  const again = () => { const y = box.scrollTop; examViewer(sid, 0, back); $('modal').querySelector('.modal-box').scrollTop = y; };
+  document.querySelectorAll('.ev-in').forEach((inp) => {
+    inp.onchange = () => {
+      let v = Number(inp.value);
+      if (!isFinite(v)) return;
+      v = Math.max(0, Math.min(Number(inp.dataset.max), halfMark(v)));
+      saveMark(sid, inp.dataset.key, v).then(again);
     };
   });
+  document.querySelectorAll('[data-evauto]').forEach((b) => { b.onclick = () => saveMark(sid, b.dataset.evauto, null).then(again); });
+  // programs of the quiz questions, programs of the student (blocks), each one running on its own micro:bit
+  document.querySelectorAll('[data-evq]').forEach((div) => { const [cid, k] = div.dataset.evq.split(':'); const w = renderProgramInto(div, CHALLENGES.find((x) => x.id === cid).questions[Number(k)].code); if (w) EVW.ws.push(w); });
+  document.querySelectorAll('[data-evp]').forEach((div) => {
+    const cid = div.dataset.evp, ch = CHALLENGES.find((x) => x.id === cid), c = r.challenges[cid];
+    const w = renderProgramInto(div, c.program, 0.75);
+    if (w) EVW.ws.push(w);
+    const slot = { mb: null };
+    slot.view = new BoardView(document.querySelector(`[data-evb="${CSS.escape(cid)}"]`), () => slot.mb);
+    const run = () => {
+      try {
+        const prog = programFromState(c.program);
+        slot.mb = new Microbit({ seed: Math.floor(Math.random() * 1e9) });
+        slot.mb.load(prog.code, { variables: JSON.parse(JSON.stringify(prog.variables)) });
+        slot.view.setFeatures(prog.features);
+      } catch (err) { slot.mb = null; }
+    };
+    run();
+    document.querySelector(`[data-evrun="${CSS.escape(cid)}"]`).onclick = run;
+    EVW.boards.push(slot);
+    try {
+      const res = evaluateChallenge(ch, programFromState(c.program));
+      document.querySelector(`[data-evc="${CSS.escape(cid)}"]`).innerHTML = `<b>Automatic check: ${res.score} %</b><ul class="criteria">${res.criteria.map((k) => `<li class="${k.points === k.max ? 'ok' : k.points > 0 ? 'part' : 'ko'}"><span>${esc(k.label)}</span><span class="pts">${k.points} / ${k.max}</span></li>`).join('')}</ul>`;
+    } catch (err) { /* the check could not run */ }
+  });
+  let last = performance.now();
+  const loop = (now) => {
+    if ($('modal').hidden || !document.querySelector('.ev-body')) { stopExamViewer(); return; }
+    const dt = Math.min(100, now - last); last = now;
+    for (const b of EVW.boards) { if (b.mb) b.mb.advance(dt, 20); b.view.update(); }
+    EVW.raf = requestAnimationFrame(loop);
+  };
+  EVW.raf = requestAnimationFrame(loop);
+  if (part) { const t = $('ev-' + part); if (t) t.scrollIntoView({ block: 'start' }); }
+}
+// from the live view: the grade of a student opens their exam
+async function openStudentExam(examId, sid) {
+  const d = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(examId))).json();
+  if (!d.exam) { alert('Exam not found.'); return; }
+  X.exam = d.exam; X.results = d.results; X.verified = {}; X.now = d.now;
+  examViewer(sid, 0, renderExamResults);
 }
 
 // ---------- ✏️ Marking: one question at a time, every student, the automatic mark that the teacher can change ----------
@@ -286,17 +472,9 @@ function renderReview(k) {
   $('rvPrev').onclick = () => renderReview(k - 1);
   $('rvNext').onclick = () => renderReview(k + 1);
   document.querySelectorAll('[data-exview]').forEach((b) => {
-    b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); const r = X.results.find((x) => x.studentId === sid); if (r) watchStudent('exam-' + sid, { slot: cid, work: examWork(r, cid) }); };
+    b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); const r = X.results.find((x) => x.studentId === sid); examViewer(sid, Math.max(0, e.challenges.indexOf(cid)), () => renderReview(k)); };
   });
-  const save = async (sid, marks, el) => {
-    const r = X.results.find((x) => x.studentId === sid);
-    try {
-      const d = await tpost('api/exam/mark', { examId: e.id, studentId: sid, key: it.key, marks, name: r && r.name });
-      if (r) r.marks = d.marks;
-      if (el) { el.textContent = '✓ saved'; setTimeout(() => { el.textContent = ''; }, 1500); }
-      refreshGrades(true);
-    } catch (err) { alert('Not saved: ' + err.message); }
-  };
+  const save = (sid, marks, el) => saveMark(sid, it.key, marks, el);
   document.querySelectorAll('.rv-mark').forEach((inp) => {
     inp.onchange = () => {
       let v = Number(inp.value);

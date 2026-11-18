@@ -114,6 +114,7 @@ async function refreshLive() {
     renderHelpQueue();
     renderLive();
     refreshGrades();
+    autoBackupExams();
     $('liveStatus').textContent = '● Live · updated ' + new Date().toLocaleTimeString();
     $('liveStatus').classList.add('on');
   } catch (e) {
@@ -133,7 +134,8 @@ async function refreshGrades(force) {
     const grades = {};
     await Promise.all(Object.values(latest).map(async (e) => {
       const r = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(e.id))).json();
-      for (const res of r.results || []) grades[res.studentId] = { ...markSheet(e.challenges, res), title: e.title, examId: e.id, className: e.className };
+      const g7 = examGrades(e, r.results || []);
+      for (const res of r.results || []) grades[res.studentId] = { ...markSheet(e.challenges, res), g7: g7[res.studentId], title: e.title, examId: e.id, className: e.className };
     }));
     T.grades = grades;
     renderLive();
@@ -143,7 +145,7 @@ function gradeCell(s) {
   const g = (T.grades || {})[s.studentId];
   if (!g) return '<span class="muted">—</span>';
   const t = Number.isInteger(g.total) ? g.total : g.total.toFixed(1);
-  return `<button class="linklike" data-grade="${esc(g.examId)}" title="${esc(g.title)}: ${t} / ${g.max} marks · click for the results">${t}/${g.max} · <b>${g.grade.toFixed(1)}</b></button>`;
+  return `<button class="linklike" data-grade="${esc(g.examId)}" data-sid="${esc(s.studentId)}" title="${esc(g.title)}: ${t} / ${g.max} marks · click to see all the answers and change the marks">${t}/${g.max} · <b>${g.g7 === undefined ? '—' : g.g7 + '/7'}</b></button>`;
 }
 
 // ---------- Classes (chosen by the teacher in Manage) ----------
@@ -566,7 +568,7 @@ async function watchStudent(id, opts = {}) {
   W.last = '';
   W.slot = opts.slot || null;
   W.static = opts.work || null;
-  openModal(`<div class="watch-head"><h2 id="wTitle" style="margin:0"></h2>${W.static ? '<span class="muted">saved file</span>' : '<span class="live-dot">● live</span>'}
+  openModal(`<div class="watch-head">${opts.back ? '<button id="wBack" title="Back to where you were">← Back</button>' : ''}<h2 id="wTitle" style="margin:0"></h2>${W.static ? '<span class="muted">saved file</span>' : '<span class="live-dot">● live</span>'}
       <label>Program <select id="wSlot"></select></label><span id="wStatus" class="muted"></span></div>
     <div id="wHist" class="hist-bar"></div>
     <div class="watch">
@@ -586,6 +588,7 @@ async function watchStudent(id, opts = {}) {
   W.view = new BoardView($('watchBoard'), () => W.mb);
   $('wSlot').onchange = () => { W.slot = $('wSlot').value; W.last = ''; W.version = null; W.histKey = ''; refreshWatch(); };
   setupWatchExtras();
+  if (opts.back) $('wBack').onclick = () => { stopWatch(); opts.back(); };
   $('wRun').onclick = () => startWatchedBoard();
   $('wCheck').onclick = checkWatched;
   let last = performance.now();
@@ -727,6 +730,7 @@ function stopWatch() {
   if (W.raf) cancelAnimationFrame(W.raf);
   W.view = null;
   if (W.ws) { W.ws.dispose(); W.ws = null; }
+  if (typeof stopExamViewer === 'function') stopExamViewer();
 }
 
 function openModal(html) { $('modalBody').innerHTML = html; $('modal').hidden = false; }
@@ -769,7 +773,7 @@ function init() {
     const w = e.target.closest('[data-watch]');
     if (w) watchStudent(T.live[Number(w.dataset.watch)].studentId);
     const gr = e.target.closest('[data-grade]');
-    if (gr) examResults(gr.dataset.grade);
+    if (gr) openStudentExam(gr.dataset.grade, gr.dataset.sid);
     const d = e.target.closest('[data-details]');
     if (d) {
       const snap = T.live[Number(d.dataset.details)];

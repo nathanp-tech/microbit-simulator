@@ -162,3 +162,23 @@ function markSheet(challengeIds, res) {
   const pct = max ? Math.round(total / max * 100) : 0;
   return { items, total, max, pct, grade: swissGrade(pct) };
 }
+
+// ---------- Grade out of 7, curved per class (a bell curve) ----------
+// Each student's total is placed against the class (z = (total − class mean) / class standard deviation), then put on
+// a normal curve of the chosen average and spread, rounded and kept between 1 and 7.
+const CURVE_DEFAULT = { mean: 4.5, sd: 1.2 };
+function curveGrades(totals, curve) {
+  const c = { ...CURVE_DEFAULT, ...(curve || {}) };
+  const n = totals.length;
+  if (!n) return [];
+  const m = totals.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(totals.reduce((a, b) => a + (b - m) * (b - m), 0) / n);
+  return totals.map((t) => Math.max(1, Math.min(7, Math.round(c.mean + c.sd * (sd > 0 ? (t - m) / sd : 0)))));
+}
+// grades of the results of one exam: { studentId: grade }
+function examGrades(exam, results) {
+  const done = results.filter((r) => r && Object.keys(r.challenges || {}).length + Object.keys(r.marks || {}).length > 0);
+  const totals = done.map((r) => markSheet(exam.challenges, r).total);
+  const g = curveGrades(totals, exam.curve);
+  return Object.fromEntries(done.map((r, i) => [r.studentId, g[i]]));
+}
