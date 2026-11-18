@@ -371,3 +371,4 @@ body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, bo
 .sim-toolbar { padding: 4px 0 6px; }
 .sim-toolbar button { height: 30px; width: 38px; }
 @media (max-height: 820px) { .sim-gestures-title { display: none; } }
+.mc-foot-left [hidden] { display: none !important; } /* Download to a real micro:bit: turned off */
