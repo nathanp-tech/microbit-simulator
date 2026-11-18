@@ -372,3 +372,18 @@ body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, bo
 .sim-toolbar button { height: 30px; width: 38px; }
 @media (max-height: 820px) { .sim-gestures-title { display: none; } }
 .mc-foot-left [hidden] { display: none !important; } /* Download to a real micro:bit: turned off */
+
+/* ---------- No bottom bar: undo / redo / zoom float at the bottom right of the blocks; a wider mission + simulator column ---------- */
+:root { --sim-w: 400px; }
+@media (max-width: 1250px) { :root { --sim-w: 350px; } }
+#mcFooter { position: fixed; right: 26px; bottom: 22px; height: auto; flex: none; background: none; border: none; padding: 0; gap: 8px; }
+#mcFooter .mc-foot-left, #mcFooter .mc-project, #mcFooter .mc-foot-spacer { display: none; }
+#mcFooter .mc-btn-pair { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18); border-radius: 4px; }
+.mc-mission .desc { font-size: 15px; }
+/* pictures in the missions */
+.mc-mission .desc .d-led { width: 30px; height: 30px; vertical-align: middle; margin: 2px 1px; }
+.mc-mission .desc .d-text { display: inline-flex; gap: 2px; vertical-align: middle; }
+.mc-mission .desc .d-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #3a3a3a; color: #fff; font-weight: 800; font-size: 12.5px; vertical-align: middle; box-shadow: inset 0 0 0 3px #888; }
+.mc-mission .desc .d-shake { display: inline-block; border: 2px solid #d6dbe8; border-radius: 12px; padding: 0 8px; font-weight: 700; font-size: 13px; background: #fff; }
+.sb-finish { white-space: nowrap; border: none; border-radius: 14px; background: #107c10; color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; margin-left: 6px; box-shadow: 0 2px 0 #0b5a0b; }
+.sb-finish:hover { background: #0e6e0e; }

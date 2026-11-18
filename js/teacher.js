@@ -32,9 +32,21 @@ const isOnline = (s) => T.serverNow - (s.receivedAt || 0) <= ONLINE_SECONDS && !
 function liveStatus(s) {
   const age = T.serverNow - (s.receivedAt || 0);
   const cur = s.challenges && s.challenges[s.current];
+  const ex = s.live && s.live.exam;
+  if (ex && !ex.over && !ex.done && (ex.away || age > ONLINE_SECONDS || s.live.status === 'left')) {
+    const why = ex.away ? 'NOT on the test page' : 'test page closed';
+    return { cls: 'away', text: `🚨 ${why}${ex.awayN ? ` <span class="away-n">· left ${ex.awayN}× · ${fmtTime(Math.round((ex.awayMs || 0) / 1000))}</span>` : ''}` };
+  }
   if (s.live && s.live.status === 'left') return { cls: 'off', text: '👋 Left' };
   if (age > ONLINE_SECONDS) return { cls: 'off', text: `⚪ Offline (${fmtTime(age)})` };
-  if (s.live && s.live.exam) return { cls: 'exam', text: s.live.exam.over ? '📝 Exam finished' : `📝 Exam · ${esc(chShort(s.live.exam.challenge))}${s.live.status === 'evaluating' ? ' (checking)' : ''}` };
+  if (s.live && s.live.exam) {
+    const x = s.live.exam;
+    const left = x.awayN ? ` <span class="away-n" title="Left the test page ${x.awayN} time(s), ${fmtTime(Math.round((x.awayMs || 0) / 1000))} in all">⚠️ left ${x.awayN}× · ${fmtTime(Math.round((x.awayMs || 0) / 1000))}</span>` : '';
+    if (x.done) return { cls: 'exam', text: '✅ Test submitted' + left };
+    if (x.over) return { cls: 'exam', text: '📝 Exam finished' + left };
+    if (x.away) return { cls: 'away', text: '🚨 NOT on the test page' + left };
+    return { cls: 'exam', text: `📝 Exam · ${esc(chShort(x.challenge))}${s.live.status === 'evaluating' ? ' (sending)' : ''}` + left };
+  }
   const st = s.live && s.live.status;
   if (st === 'evaluating') return { cls: '', text: '✅ Checking their answer' };
   return { cls: '', text: '✏️ Programming' };
@@ -47,7 +59,7 @@ function rowHtml(s, i, stats, source) {
   const modeCell = free ? '🛠️ Free' : '🧭 Challenges';
   const status = source === 'live' ? liveStatus(s) : { cls: '', text: s.lastSavedAt ? new Date(s.lastSavedAt).toLocaleString() : '—' };
   const canValidate = source === 'live' && s.mode === 'guided' && cur && cur.status !== 'validated';
-  return `<tr class="${status.cls === 'wait' ? 'waiting' : ''}">
+  return `<tr class="${status.cls === 'wait' ? 'waiting' : status.cls === 'away' ? 'away-row' : ''}">
     <td>${source === 'live' && T.help.some((h) => h.studentId === s.studentId) ? '<span class="help-badge" title="Asked for help">🙋</span>' : ''}${source === 'live' ? `<span class="pres ${isOnline(s) ? 'on' : 'off'}" title="${isOnline(s) ? 'Connected now' : 'Not connected now'}"></span>` : ''}<b>${esc(s.name)}</b>${s.className && source !== 'live' ? ` <span class="muted">${esc(s.className)}</span>` : ''}</td>
     <td>${modeCell}</td>
     <td>${dotsHtml(s, source + ':' + i)}<span class="muted">${a.validated} / ${CHALLENGES.length}</span></td>

@@ -55,6 +55,10 @@ How a check works: the program runs on a fresh simulated micro:bit, in virtual t
 
 **Test password:** each class has its own 4-digit test password (shown next to *Start an exam* on the teacher page, and in big after starting; change it in Manage → Class lists). Students open a running test with the **📝 Test** card of the welcome page (or the window that appears if they are already working) and that password; without it, the server refuses their results.
 
+**During the test:** after each *Submit my program* the student goes straight to the next challenge not submitted yet. *✅ Submit my test* (in the bar of steps) hands in the whole test: the latest programs are sent and the test cannot be opened again. When the time is over (or the teacher stops it), the test closes and cannot be opened again either. The live view shows in red a student who is **not on the test page** (other tab, other window, page closed), with how many times and how long; the results show the hand-in time and the same count (also in the CSV).
+
+**Help queue:** first come, first served (oldest first, for the teacher and for the student who sees their place); asking again or reloading the page keeps the place in the queue.
+
 In an exam: the quiz answers are sent **once** and not marked on screen (no guessing by elimination); a student cannot leave the exam with *Exit*, and a name already open on another computer cannot be taken by a classmate (it frees itself 1 minute after that computer closes). A program that shows things by itself in a *forever* loop, without the button or the shake, scores 0 on the event challenges.
 
 Note for the reaction game: like in MakeCode, *show icon* waits 600 ms. A program that sets `start` after the heart (as in the lesson plan) measures 600 ms less and counts B as "too early" during those 600 ms; both orders are accepted by the check.

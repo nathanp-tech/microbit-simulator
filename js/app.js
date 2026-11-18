@@ -335,6 +335,11 @@ function setupToolboxChrome() {
     s.querySelector('input').addEventListener('input', (e) => searchBlocks(e.target.value));
     s.querySelector('input').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.target.value = ''; searchBlocks(''); } });
   }
+  // the toolbox gets its final width after the fonts and the search box: measure the workspace again, or the blocks hide under it
+  if (tbDiv && window.ResizeObserver && !tbDiv.mbObserved) {
+    tbDiv.mbObserved = true;
+    new ResizeObserver(() => { if (ws) Blockly.svgResize(ws); }).observe(tbDiv);
+  }
 }
 let searchIndex = null;
 function searchBlocks(q) {
@@ -380,6 +385,8 @@ function syncMoreCategories(tb) {
     const open = !!item && (item === it || children.includes(item));
     if (it.isExpanded() !== open) it.setExpanded(open);
   }
+  // Blockly hides the flyout when a category closes its "more": show the blocks of the selected category again
+  if (item && !tb.getFlyout().isVisible()) tb.refreshSelection();
 }
 
 // "New variable name:" like MakeCode
@@ -662,6 +669,7 @@ function startSession(data, { quiet = false } = {}) {
   setMode(appModeOf(data.mode), { initial: true });
   if (quiet) return;
   Sync.push(liveState(), true);
+  restoreHelp();
 }
 let choosing = false;
 async function chooseMode(mode) {
@@ -683,9 +691,10 @@ function startTest() {
     await chooseModeNow('guided');
     if (!Progress.data) return;
     try {
-      await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const r = await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ testCode: code, className: Progress.data.className, studentId: Progress.data.studentId, name: Progress.data.name }) });
-    } catch (e) { /* the results say "open the test first" only if this never arrives: it is tried again below */ }
+      if (r.status === 403 || r.status === 404) { const d = await r.json().catch(() => ({})); if (d.finished) examEntry(exam).done = Date.now(); else { toast('📝 ' + (d.error || 'The test cannot be opened.'), 5000); return; } }
+    } catch (e) { /* network trouble: the results are sent again later */ }
     joinExam(exam);
   });
 }
@@ -789,7 +798,7 @@ function renderGuided() {
   $('challengeMeta').textContent = `${categoryOf(ch).label.split(' · ')[0]} · ${ch.quiz ? 'Quiz · ' : ''}${ch.n} / ${CHALLENGES.length}`;
   $('btnAllCh').hidden = false;
   $('btnSolution').hidden = !App.preview || ch.quiz;
-  $('challengeDesc').innerHTML = ch.description;
+  $('challengeDesc').innerHTML = richDesc(ch.description);
   const hints = ch.hints || [];
   $('hintBox').innerHTML = hints.slice(0, entry.hints).map((h, i) => `<div class="hint-card">💡 <b>Hint ${i + 1}:</b> ${esc(h)}</div>`).join('');
   $('btnHint').hidden = entry.hints >= hints.length || entry.status === 'validated';
@@ -814,9 +823,10 @@ function renderStepBar() {
     const label = c.quiz ? 'Quiz' : c.title;
     const tip = s === 'locked' ? 'Pass the step before to open this one' : s === 'done' ? (App.exam ? 'Submitted' : 'Done') : 'To do';
     return `${i ? '<span class="sb-line"></span>' : ''}<button class="sb-step ${s}${cur ? ' current' : ''}" data-ch="${esc(id)}" title="${esc(label)} · ${tip}"${s === 'locked' ? ' disabled' : ''}><span class="sb-n">${s === 'done' ? '✓' : s === 'locked' ? '🔒' : i + 1}</span><span class="sb-t">${esc(label)}</span></button>`;
-  }).join('')}</div>${App.exam ? '<span id="sbTimer" class="sb-timer"></span>' : ''}`;
+  }).join('')}</div>${App.exam ? `<span id="sbTimer" class="sb-timer"></span>${CR.examOver ? '' : '<button id="btnFinishTest" class="sb-finish" title="Hand in the whole test when you have finished">✅ Submit my test</button>'}` : ''}`;
   bar.hidden = false;
   if (App.exam) updateExamBanner();
+  if ($('btnFinishTest')) $('btnFinishTest').onclick = confirmFinishTest;
   bar.querySelectorAll('[data-ch]').forEach((b) => { b.onclick = () => { if (App.status === 'idle') enterChallenge(b.dataset.ch); }; });
 }
 function renderValidation() {
@@ -980,7 +990,7 @@ function liveState(status) {
     status: status || (App.status === 'idle' ? 'editing' : App.status),
     mode: progressMode(),
     challenge: App.mode === 'challenge' && App.challenge ? App.challenge.id : null,
-    exam: App.exam ? { id: App.exam.id, challenge: App.examCh, over: CR.examOver } : null,
+    exam: App.exam ? { id: App.exam.id, challenge: App.examCh, over: CR.examOver, done: !!examEntry().done, ...awayInfo() } : null,
     blocks: ws ? ws.getAllBlocks(false).filter((b) => !b.isShadow()).length : 0,
   };
 }

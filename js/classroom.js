@@ -67,6 +67,15 @@ async function pollHelpQueue() {
   CR.helpPos = k + 1;
   renderHelpButton();
 }
+async function restoreHelp() {
+  if (!Progress.data || CR.helpSince) return;
+  const d = await Sync.getJson(`api/help/queue?studentId=${encodeURIComponent(Progress.data.studentId)}&className=${encodeURIComponent(Progress.data.className || '')}`);
+  const me = d && (d.queue || []).find((h) => h.me);
+  if (!me || CR.helpSince) return;
+  CR.helpSince = me.since;
+  renderHelpButton();
+  pollHelpQueue();
+}
 async function toggleHelp() {
   if (!Progress.data) return;
   if (!Sync.online) { toast('Not connected to the class server: raise your hand 🙂'); return; }
@@ -191,6 +200,7 @@ function askTestCode(e, onOk) {
       if (Progress.data) Object.assign(body, { studentId: Progress.data.studentId, name: Progress.data.name });
       const r = await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
+      if (d.finished && Progress.data) { closeModal(); examEntry(d.exam || e).done = Date.now(); joinExam(d.exam || e); return; }
       if (!r.ok) { $('tCodeErr').textContent = d.error || 'The class server does not answer. Try again.'; return; }
       closeModal();
       if (onOk) await onOk(code, d.exam);
@@ -225,6 +235,9 @@ function startExam(e) {
   App.examCh = null;
   enterExamChallenge(examEntry(e).current || e.challenges[0], { skipStore: true });
   updateExamBanner();
+  if (examEntry(e).done) { showExamEnd(true); return; }
+  const aw = examEntry(e).away;
+  if (aw && aw.since) { aw.ms += Math.max(0, Date.now() - aw.since); aw.since = 0; } // the page was closed or reloaded
   toast(`📝 The exam "${e.title}" has started. Good luck!`, 5000);
   Progress.log('exam-start', null, e.id);
   Sync.push(liveState(), true);
@@ -252,7 +265,7 @@ function renderExam() {
   $('btnAllCh').hidden = true;
   $('btnHint').textContent = '💡 Need a hint?';
   $('btnSolution').hidden = true;
-  $('challengeDesc').innerHTML = ch.description;
+  $('challengeDesc').innerHTML = richDesc(ch.description);
   const hints = e.hints ? ch.hints || [] : [];
   $('hintBox').innerHTML = hints.slice(0, slot.hints).map((h, i) => `<div class="hint-card">💡 <b>Hint ${i + 1}:</b> ${esc(h)}</div>`).join('');
   $('btnHint').hidden = slot.hints >= hints.length;
@@ -274,18 +287,28 @@ function onExamGrade(res) {
   const ch = App.challenge, id = ch.id, slot = examSlot(id);
   const program = ch.quiz ? { quiz: true, answers: quizAnswers() } : Blockly.serialization.workspaces.save(ws), robot = null;
   slot.checks++;
+  slot.sentProgram = program;
   if (slot.best === null || res.score > slot.best) { slot.best = res.score; slot.bestProgram = program; }
   Progress.log('exam-check', id, res.score);
   Progress.persist();
   queueExamResult({ studentId: Progress.data.studentId, examId: App.exam.id, challengeId: id, score: res.score, program, robot, name: Progress.data.name, className: Progress.data.className });
   renderExam();
-  if (ch.quiz) { showQuiz(slot); openModal('<h2>✅ Your answers are sent</h2><p>Well done! Go on with the other challenges of the exam.</p><div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>'); return; }
-  // no score in the exam: the students test their program themselves, then submit it
-  openModal(`<h2>📨 Program submitted</h2><p>Your teacher will see it. If you improve it, test it again in the simulator and submit it again.</p>
+  // no score in the exam: straight on to the next challenge not submitted yet (the bar of steps leads back to any of them)
+  const order = App.exam.challenges, k = order.indexOf(id);
+  const next = order.slice(k + 1).concat(order.slice(0, k)).find((c) => !examSlot(c).checks);
+  const sent = ch.quiz ? '✅ Answers sent' : '📨 Program submitted';
+  if (next) {
+    enterExamChallenge(next);
+    toast(`${sent}. Next: ${chTitle(next)}`, 4000);
+    return;
+  }
+  if (ch.quiz) showQuiz(slot);
+  openModal(`<h2>${sent}</h2><p>🎉 Everything is submitted. You can still click a step in the bar at the top, improve a program, test it and submit it again.</p>
     <div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>`);
 }
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
 function queueExamResult(r) {
+  if (App.exam && !r.away) { const a = awayInfo(); r.away = { n: a.awayN, ms: a.awayMs }; }
   (Progress.data.examQueue = Progress.data.examQueue || []).push(r);
   Progress.persist();
   flushExamResults();
@@ -298,7 +321,7 @@ async function flushExamResults() {
   try {
     while (q.length) {
       let r;
-      try { r = await sfetch('api/exam/result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q[0]) }); } catch (e) { break; }
+      try { r = await sfetch(q[0].finish ? 'api/exam/finish' : 'api/exam/result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q[0]) }); } catch (e) { break; }
       if (r.status >= 500 || r.status === 401) break; // server trouble or class code: try again later
       q.shift(); // received, or refused for good (exam over)
       Progress.persist();
@@ -315,40 +338,81 @@ function updateExamBanner() {
   b.innerHTML = CR.examOver ? `📝 ${esc(App.exam.title)} · ⏱ finished` : `📝 <b>${esc(App.exam.title)}</b> · ⏱ <b>${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}</b> left`;
   if (!CR.examOver && left <= 0) finishExam();
 }
-function finishExam() {
+function finishExam(handedIn = false) {
   if (!App.exam || CR.examOver) return;
   storeWorkspace();
   submitForgotten();
+  setAway(false);
+  if (handedIn) {
+    examEntry().done = Date.now();
+    queueExamResult({ finish: true, studentId: Progress.data.studentId, examId: App.exam.id, name: Progress.data.name });
+  }
   CR.examOver = true;
   flushExamResults();
-  Progress.log('exam-end', null, App.exam.id);
+  Progress.log(handedIn ? 'exam-submit' : 'exam-end', null, App.exam.id);
   Progress.persist();
   Sync.push(liveState(), true);
+  showExamEnd(handedIn);
+}
+function showExamEnd(handedIn) {
+  CR.examOver = true;
   closeModal();
   const rows = App.exam.challenges.map((id) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? '✓ submitted' : '—'}</b></td></tr>`).join('');
-  $('examOverlayBody').innerHTML = `<div class="ov-icon">⏱</div><h1>The exam is over</h1><table class="exam-res">${rows}</table><p class="muted">Your work is saved. Wait for your teacher.</p>`;
+  $('examOverlayBody').innerHTML = handedIn
+    ? `<div class="ov-icon">✅</div><h1>Test submitted</h1><table class="exam-res">${rows}</table><p class="muted">Well done! Your teacher has your work. Wait quietly until the end of the test.</p>`
+    : `<div class="ov-icon">⏱</div><h1>The exam is over</h1><table class="exam-res">${rows}</table><p class="muted">Your work is saved. Wait for your teacher.</p>`;
   $('examOverlay').hidden = false;
+  renderStepBar();
   updateExamBanner();
 }
+function confirmFinishTest() {
+  if (!App.exam || CR.examOver || App.status !== 'idle') return;
+  storeWorkspace();
+  const missing = App.exam.challenges.filter((id) => !examSlot(id).checks);
+  openModal(`<h2>✅ Submit my test?</h2>
+    ${missing.length ? `<p>⚠️ Not submitted yet: <b>${missing.map((id) => esc(chTitle(id))).join(', ')}</b>. Your latest work on ${missing.length > 1 ? 'them' : 'it'} is sent too.</p>` : '<p>Everything is submitted. Your latest programs are sent too.</p>'}
+    <p><b>After this, you cannot change your test any more.</b></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="closeModal()">← Go back to my test</button><button class="primary" id="ftGo">✅ Yes, submit my test</button></div>`);
+  $('ftGo').onclick = () => finishExam(true);
+}
+
+// ---------- 👀 Leaving the test page (another tab, another window, the page closed) ----------
+function awayInfo() {
+  const a = (App.exam && examEntry().away) || { n: 0, ms: 0, since: 0 };
+  return { away: !!a.since, awayN: a.n, awayMs: a.ms + (a.since ? Date.now() - a.since : 0) };
+}
+function setAway(away) {
+  if (!App.exam || !Progress.data) return;
+  const e = examEntry(), a = e.away || (e.away = { n: 0, ms: 0, since: 0 });
+  if (away && (CR.examOver || a.since)) return;
+  if (!away && !a.since) return;
+  if (away) { a.n++; a.since = Date.now(); } else { a.ms += Date.now() - a.since; a.since = 0; }
+  Progress.persist();
+  Sync.push(liveState(), true);
+}
+document.addEventListener('visibilitychange', () => setAway(document.hidden));
+window.addEventListener('blur', () => setAway(true));
+window.addEventListener('focus', () => { if (!document.hidden) setAway(false); });
+window.addEventListener('pagehide', () => setAway(true));
 // A program (or quiz answers) the student never submitted is graded at the end, so nothing is lost
 function submitForgotten() {
   for (const id of App.exam.challenges) {
     const slot = examSlot(id), ch = CHALLENGES.find((c) => c.id === id);
-    if (!ch || slot.checks) continue;
+    if (!ch) continue;
     try {
       let res, program;
       if (ch.quiz) {
-        if (!(slot.answers || []).some((a) => a !== null && a !== undefined)) continue;
+        if (slot.checks || !(slot.answers || []).some((a) => a !== null && a !== undefined)) continue;
         program = { quiz: true, answers: slot.answers };
         res = gradeQuiz(ch, slot.answers);
       } else {
-        if (!slot.program) continue;
+        if (!slot.program || (slot.checks && JSON.stringify(slot.program) === JSON.stringify(slot.sentProgram))) continue;
         program = slot.program;
         res = evaluateChallenge(ch, programFromState(program));
       }
-      slot.checks = 1;
-      slot.best = res.score;
-      slot.bestProgram = program;
+      slot.checks = (slot.checks || 0) + 1;
+      if (slot.best === null || res.score > slot.best) { slot.best = res.score; slot.bestProgram = program; }
+      slot.sentProgram = program;
       queueExamResult({ studentId: Progress.data.studentId, examId: App.exam.id, challengeId: id, score: res.score, program, robot: null, name: Progress.data.name, className: Progress.data.className, auto: true });
     } catch (e) { console.error(e); }
   }

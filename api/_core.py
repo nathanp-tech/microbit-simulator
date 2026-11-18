@@ -711,8 +711,9 @@ class Api:
             if not ID.fullmatch(sid):
                 return 400, {'error': 'bad id'}
             if data.get('on'):
+                old = jload(self.r(['HGET', P + 'help', sid])[0], {}) or {}
                 req = {'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': clean_text(data.get('className') if g == '*' else g, 20),
-                       'where': clean_text(data.get('where'), 120), 'message': clean_text(data.get('message'), 200), 'since': time.time()}
+                       'where': clean_text(data.get('where'), 120), 'message': clean_text(data.get('message'), 200), 'since': old.get('since') or time.time()}
                 self.r(['HSET', P + 'help', sid, json.dumps(req)])
                 return 200, {'ok': True, 'since': req['since']}
             self.r(['HDEL', P + 'help', sid])
@@ -774,11 +775,32 @@ class Api:
                 if not ID.fullmatch(sid):
                     return 400, {'error': 'bad request'}
                 res = jload(self.r(['HGET', P + 'examres:' + exam['id'], sid])[0], {}) or {}
+                if res.get('finishedAt'):
+                    return 403, {'error': 'You have already submitted this test.', 'finished': True}
                 if not res.get('joined'):
                     res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': cls, 'joined': time.time(), 'updatedAt': time.time()})
                     res.setdefault('challenges', {})
                     self.r(['HSET', P + 'examres:' + exam['id'], sid, json.dumps(res)])
             return 200, {'ok': True, 'exam': exam}
+        if path == '/api/exam/finish':
+            # "Submit my test": the student hands in the test; they cannot open it again.
+            sid, eid = str(data.get('studentId', '')), str(data.get('examId', ''))
+            if not ID.fullmatch(sid) or not ID.fullmatch(eid):
+                return 400, {'error': 'bad request'}
+            raw = self.r(['HGET', P + 'exams', eid], ['HGET', P + 'examres:' + eid, sid])
+            exam, res = jload(raw[0]), jload(raw[1], {}) or {}
+            if not exam or (g != '*' and exam.get('className') != g):
+                return 404, {'error': 'no such exam'}
+            if g != '*' and not res.get('joined'):
+                return 403, {'error': 'open the test with its password first'}
+            if not res.get('finishedAt'):
+                res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60) or res.get('name'), 'className': exam.get('className'),
+                            'finishedAt': time.time(), 'updatedAt': time.time()})
+                res.setdefault('challenges', {})
+            if isinstance(data.get('away'), dict):
+                res['away'] = {'n': int(data['away'].get('n') or 0), 'ms': int(data['away'].get('ms') or 0)}
+            self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
+            return 200, {'ok': True, 'finishedAt': res['finishedAt']}
         if path == '/api/exam/result':
             # A student checked a solution during an exam: keep the best score (and its program) per challenge.
             sid, eid, chid = str(data.get('studentId', '')), str(data.get('examId', '')), str(data.get('challengeId', ''))
@@ -792,6 +814,10 @@ class Api:
                 return 409, {'error': 'the exam is over'}
             if g != '*' and not res.get('joined'):
                 return 403, {'error': 'open the test with its password first'}
+            if res.get('finishedAt'):
+                return 409, {'error': 'the test is already submitted'}
+            if isinstance(data.get('away'), dict):
+                res['away'] = {'n': int(data['away'].get('n') or 0), 'ms': int(data['away'].get('ms') or 0)}
             res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': exam.get('className'), 'updatedAt': time.time()})
             best = res.setdefault('challenges', {}).get(chid)
             score = max(0, min(100, int(data.get('score') or 0)))

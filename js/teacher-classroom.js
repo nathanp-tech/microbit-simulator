@@ -145,6 +145,7 @@ async function examsList() {
   });
 }
 const X = { exam: null, results: [], verified: {} };
+const awayCell = (r) => (!r.away || !r.away.n ? '<span class="muted">—</span>' : `<span class="away-n">⚠️ ${r.away.n}× · ${fmtTime(Math.round(r.away.ms / 1000))}</span>`);
 async function examResults(id) {
   const d = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(id))).json();
   if (!d.exam) { alert('Exam not found.'); return; }
@@ -172,7 +173,7 @@ function renderExamResults() {
     <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min${e.hints ? ' · hints allowed' : ''} · ${running ? '⏱ still running' : 'finished'} · score = best check per challenge, grade = Swiss scale from the average.</p>
     <div class="actions"><button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying the programs</button>
       <button id="exCsv">📊 CSV</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
-    <table class="cls exam-table"><thead><tr><th>Student</th>${e.challenges.map((c) => `<th title="${esc(chName(c))}">${esc(chName(c).replace(/^\d+\.\s*/, ''))}</th>`).join('')}<th>Average</th><th>Grade</th></tr></thead><tbody>
+    <table class="cls exam-table"><thead><tr><th>Student</th>${e.challenges.map((c) => `<th title="${esc(chName(c))}">${esc(chName(c).replace(/^\d+\.\s*/, ''))}</th>`).join('')}<th>Average</th><th>Grade</th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
     ${rows.map(({ r, avg, grade }) => `<tr${r.missing ? ' class="absent"' : ''}><td><b>${esc(r.name)}</b>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
       ${e.challenges.map((cid) => {
     const c = (r.challenges || {})[cid];
@@ -181,12 +182,15 @@ function renderExamResults() {
     const flag = v === undefined ? '' : v === c.score ? ' <span class="ok-mark" title="Verified">✓</span>' : ` <span class="warn-mark" title="The replay gives ${v} % (the student's browser said ${c.score} %)">⚠ ${v} %</span>`;
     return `<td><button class="linklike" data-exview="${esc(r.studentId)}:${esc(cid)}" title="See the program">${c.score} %</button>${flag} <span class="muted">(${c.checks}×)</span></td>`;
   }).join('')}
-      <td><b>${avg} %</b></td><td><b class="grade">${r.missing ? '—' : grade.toFixed(1)}</b></td></tr>`).join('')}</tbody></table>`);
+      <td><b>${avg} %</b></td><td><b class="grade">${r.missing ? '—' : grade.toFixed(1)}</b></td>
+      <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
+      <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table>`);
   $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
   $('exRefresh').onclick = () => examResults(e.id);
   $('exCsv').onclick = () => {
-    const head = ['Class', 'Student', ...e.challenges.map(chName), 'Average %', 'Grade'];
-    const lines = [head].concat(rows.map(({ r, scores, avg, grade }) => [e.className, r.name, ...scores, avg, r.missing ? '' : grade]));
+    const head = ['Class', 'Student', ...e.challenges.map(chName), 'Average %', 'Grade', 'Handed in', 'Left the page (times)', 'Away (seconds)'];
+    const lines = [head].concat(rows.map(({ r, scores, avg, grade }) => [e.className, r.name, ...scores, avg, r.missing ? '' : grade,
+      r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString() : '', r.away ? r.away.n : '', r.away ? Math.round(r.away.ms / 1000) : '']));
     const csv = '﻿' + lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

@@ -9,6 +9,25 @@ const CATEGORIES = [
   { id: 'u3', icon: '🌡️', label: 'Unit 3 · Sensors & variables' },
   { id: 'u4', icon: '🔀', label: 'Unit 4 · Conditions' },
 ];
+// Pictures in the missions: [[icon:Happy]] (an icon on the LEDs), [[text:3]] (a number or letters on the LEDs),
+// [[leds:all]] / [[leds:none]], [[btn:A]] (a button of the board), [[shake]].
+function ledPicture(rows, title) {
+  const cell = (r, c) => `<rect x="${3 + c * 9}" y="${3 + r * 9}" width="6" height="6" rx="1" fill="${rows[r][c] ? '#ff2a2a' : '#3a3a3a'}"/>`;
+  let cells = '';
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) cells += cell(r, c);
+  return `<svg class="d-led" viewBox="0 0 48 48" role="img" aria-label="${title}"><title>${title}</title><rect width="48" height="48" rx="6" fill="#111"/>${cells}</svg>`;
+}
+const patternRows = (p) => p.split(/\s+/).map((row) => row.split('').map((c) => c === '#'));
+function richDesc(html) {
+  return String(html || '').replace(/\[\[(\w+)(?::([^\]]*))?\]\]/g, (m, kind, arg = '') => {
+    if (kind === 'icon' && ICONS[arg]) return ledPicture(patternRows(ICONS[arg]), 'icon ' + iconLabel(arg));
+    if (kind === 'text') return `<span class="d-text">${arg.split('').map((ch) => ledPicture(glyph(ch), ch)).join('')}</span>`;
+    if (kind === 'leds') return ledPicture([0, 1, 2, 3, 4].map(() => [0, 1, 2, 3, 4].map(() => arg === 'all')), arg === 'all' ? 'all LEDs on' : 'screen cleared');
+    if (kind === 'btn') return `<span class="d-btn">${arg}</span>`;
+    if (kind === 'shake') return '<span class="d-shake">〰️ shake</span>';
+    return m;
+  });
+}
 const categoryOf = (ch) => CATEGORIES.find((c) => c.id === ch.cat) || CATEGORIES[0];
 
 // ---------- helpers for the tests ----------
@@ -42,7 +61,7 @@ const nearReaction = (nums, r) => near(nums, r + 50, 200) || near(nums, r - 550,
 const CHALLENGES = [
   {
     id: 'mood', cat: 'u1', level: 1, title: 'Mood display', lesson: 'L2',
-    description: '<ul class="steps"><li>Press <b>A</b> → show icon <b>Happy</b></li><li>Press <b>B</b> → show icon <b>Sad</b></li><li>Press <b>A+B</b> → your own reaction (surprised, asleep, angry…)</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, B, then A+B on the board.</p>',
+    description: '<ul class="steps"><li>Press [[btn:A]] → show icon <b>Happy</b> [[icon:Happy]]</li><li>Press [[btn:B]] → show icon <b>Sad</b> [[icon:Sad]]</li><li>Press [[btn:A+B]] → your own reaction, for example [[icon:Surprised]] [[icon:Asleep]] [[icon:Angry]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, B, then A+B on the board.</p>',
     skills: 'on button A / B / A+B pressed, show icon',
     hints: ['Find "on button A pressed" in Input. Change A to B or A+B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
@@ -62,7 +81,7 @@ const CHALLENGES = [
   },
   {
     id: 'dice', cat: 'u2', level: 1, title: 'Electronic dice', lesson: 'L3',
-    description: '<ul class="steps"><li><b>on shake</b> → show a number from <b>1 to 6</b></li><li>Use <b>show number</b> and <b>pick random</b></li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> on the board, many times.</p>',
+    description: '<ul class="steps"><li>[[shake]] → show a number from <b>1 to 6</b>, for example [[text:4]]</li><li>Use <b>show number</b> and <b>pick random</b></li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> on the board, many times.</p>',
     skills: 'on shake, pick random, show number',
     hints: ['Put "show number" inside "on shake".', 'Drag "pick random 0 to 10" (Math) into show number, then change it: both ends are included!'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
@@ -77,7 +96,7 @@ const CHALLENGES = [
   },
   {
     id: 'rps', cat: 'u2', level: 2, title: 'Rock Paper Scissors', lesson: 'L4',
-    description: '<ul class="steps"><li><b>on shake</b> → set the variable <b>choice</b> to <b>pick random 0 to 2</b></li><li><b>if / else if / else</b>: 0 → rock (icon SmallSquare), 1 → paper (icon Square), 2 → scissors (icon Scissors)</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
+    description: '<ul class="steps"><li>[[shake]] → set the variable <b>choice</b> to <b>pick random 0 to 2</b></li><li><b>if / else if / else</b>:<br>0 → rock [[icon:SmallSquare]] &nbsp; 1 → paper [[icon:Square]] &nbsp; 2 → scissors [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
     skills: 'variables, pick random, if / else if',
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
@@ -92,7 +111,7 @@ const CHALLENGES = [
   },
   {
     id: 'step-counter', cat: 'u3', level: 2, title: 'Step counter', lesson: 'L6',
-    description: '<ul class="steps"><li>The variable <b>steps</b> starts at <b>0</b></li><li><b>on shake</b> → steps goes up by <b>1</b> and the new number is <b>shown</b></li><li>Press <b>B</b> → steps goes back to <b>0</b></li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 3 times (1, 2, 3), press B, then SHAKE again (1).</p>',
+    description: '<ul class="steps"><li>The variable <b>steps</b> starts at <b>0</b></li><li>[[shake]] → steps goes up by <b>1</b> and the new number is <b>shown</b>: [[text:1]] then [[text:2]] then [[text:3]]…</li><li>Press [[btn:B]] → steps goes back to <b>0</b> (the next shake shows [[text:1]])</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 3 times (1, 2, 3), press B, then SHAKE again (1).</p>',
     skills: 'variables: set, change; on shake; buttons',
     hints: ['Variables → Make a Variable… → steps. In "on start": set steps to 0.', '"on shake": change steps by 1, then show number steps. "on button B pressed": set steps to 0.'],
     tests: (() => {
@@ -109,7 +128,7 @@ const CHALLENGES = [
   },
   {
     id: 'night-light', cat: 'u4', level: 2, title: 'Night light', lesson: 'L7 (A)',
-    description: '<ul class="steps"><li><b>forever</b>: check the <b>light level</b></li><li><b>if</b> light level <b>&lt;</b> your threshold (dark) → <b>all 25 LEDs on</b> (show leds)</li><li><b>else</b> → <b>clear screen</b></li><li>Choose a threshold between 20 and 200</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board) down to dark, then up to bright.</p>',
+    description: '<ul class="steps"><li><b>forever</b>: check the <b>light level</b></li><li><b>if</b> light level <b>&lt;</b> your threshold (dark) → <b>all 25 LEDs on</b> [[leds:all]] (show leds)</li><li><b>else</b> → <b>clear screen</b> [[leds:none]]</li><li>Choose a threshold between 20 and 200</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board) down to dark, then up to bright.</p>',
     skills: 'if / else, comparison, light level, threshold',
     hints: ['forever → if (light level < 50) then show leds (all on) else clear screen.', 'First show the light level with show number to choose your threshold.'],
     tests: [
@@ -120,7 +139,7 @@ const CHALLENGES = [
   },
   {
     id: 'reaction', cat: 'u4', level: 3, title: 'Reaction game', lesson: 'L8',
-    description: '<ul class="steps"><li>Press <b>A</b> → set <b>ready</b> to 0, show "WAIT", pause <b>pick random 1000 to 4000</b> ms, show icon <b>Heart</b>, set <b>start</b> to running time, set ready to 1</li><li>Press <b>B</b> → <b>if</b> ready = 1: show number <b>running time − start</b>, <b>else</b>: show icon <b>Sad</b> (too early)</li></ul><p class="test-it">🧪 <b>Test it:</b> press A, wait for the heart, press B. Then press B too early.</p>',
+    description: '<ul class="steps"><li>Press [[btn:A]] → set <b>ready</b> to 0, show "WAIT", pause <b>pick random 1000 to 4000</b> ms, show icon <b>Heart</b> [[icon:Heart]], set <b>start</b> to running time, set ready to 1</li><li>Press [[btn:B]] → <b>if</b> ready = 1: show number <b>running time − start</b> (for example <b>350</b> ms), <b>else</b>: show icon <b>Sad</b> [[icon:Sad]] (too early)</li></ul><p class="test-it">🧪 <b>Test it:</b> press A, wait for the heart, press B. Then press B too early.</p>',
     skills: 'running time, pause, pick random, variables, conditions',
     hints: ['A: set ready to 0, show string "WAIT", pause (pick random 1000 to 4000), show icon heart, set start to running time (ms), set ready to 1.', 'B: if ready = 1 then show number (running time (ms) − start) else show icon sad.'],
     tests: [

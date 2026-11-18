@@ -492,3 +492,7 @@ body.preview #studentChip { background: #f0a020; color: #fff; }
 .ctl-badge.code { background: #e8f0ff; color: #2c5aa0; font-variant-numeric: tabular-nums; }
 .code-row { margin: 4px 0; gap: 4px; }
 .code-row input { font-variant-numeric: tabular-nums; width: 90px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); }
+/* the test: a student who left the test page */
+td.st.away { color: #c50f1f; font-weight: 800; }
+tr.away-row td { background: #fde7e9; }
+.away-n { color: #c50f1f; font-weight: 600; font-size: 12px; white-space: nowrap; }
