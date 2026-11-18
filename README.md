@@ -53,6 +53,8 @@ The other challenges written for the units (name tag, animation, gestures, score
 
 How a check works: the program runs on a fresh simulated micro:bit, in virtual time (a check takes a fraction of a second). A test script presses the buttons, shakes the board, changes the light, the temperature or the heading, then looks at what was shown (numbers, texts, icons, LED patterns). Each criterion gives points; the score is the share of points. Random numbers use fixed seeds, so a check always gives the same score. Quizzes: the wrong answers are shown in red, the right answer is not given.
 
+**Test password:** each class has its own 4-digit test password (shown next to *Start an exam* on the teacher page, and in big after starting; change it in Manage → Class lists). Students open a running test with the **📝 Test** card of the welcome page (or the window that appears if they are already working) and that password; without it, the server refuses their results.
+
 In an exam: the quiz answers are sent **once** and not marked on screen (no guessing by elimination); a student cannot leave the exam with *Exit*, and a name already open on another computer cannot be taken by a classmate (it frees itself 1 minute after that computer closes). A program that shows things by itself in a *forever* loop, without the button or the shake, scores 0 on the event challenges.
 
 Note for the reaction game: like in MakeCode, *show icon* waits 600 ms. A program that sets `start` after the heart (as in the lesson plan) measures 600 ms less and counts B as "too early" during those 600 ms; both orders are accepted by the check.

@@ -316,7 +316,7 @@ class Api:
     def __init__(self, store, teacher_code, hosted=False):
         self.store, self.teacher_code, self.hosted = store, teacher_code, hosted
         self.backup_checked = ''
-        self._codes, self._codes_t, self._raw_settings = {}, 0, {}
+        self._codes, self._tcodes, self._codes_t, self._raw_settings = {}, {}, 0, {}
 
     # small wrappers
     def r(self, *cmds):
@@ -339,6 +339,7 @@ class Api:
         s = {**DEFAULT_SETTINGS, **{k: v for k, v in raw.items() if k in DEFAULT_SETTINGS}}
         if teacher:
             s['classCodes'] = self.class_codes(fresh=True)
+            s['testCodes'] = dict(self._tcodes)
         return {**s, **HOSTED_SYNC} if self.hosted else s
 
     def bump(self):
@@ -361,12 +362,22 @@ class Api:
                     code = ''.join(random.choice('23456789') for _ in range(6))
                 codes[c] = code
                 changed = True
+        # the test password of each class (4 digits): the teacher gives it at the start of a test
+        tcodes = {c: str(v) for c, v in (raw.get('testCodes') or {}).items() if v}
+        for c in roster:
+            if not tcodes.get(c):
+                tcodes[c] = ''.join(random.choice('23456789') for _ in range(4))
+                changed = True
         if changed or 'studentCode' in raw:
-            raw['classCodes'] = codes
+            raw['classCodes'], raw['testCodes'] = codes, tcodes
             raw.pop('studentCode', None)
             self.r(['SET', P + 'settings', json.dumps(raw)])
-        self._codes, self._codes_t, self._raw_settings = codes, time.time(), raw
+        self._codes, self._tcodes, self._codes_t, self._raw_settings = codes, tcodes, time.time(), raw
         return codes
+
+    def test_codes(self):
+        self.class_codes(fresh=True)
+        return dict(self._tcodes)
 
     def grant(self, ctx, params, body=None):
         """'*' for the teacher (or the class server's own computer), the class of the code for a student, None otherwise."""
@@ -490,6 +501,7 @@ class Api:
                     'passwordOk': code == self.teacher_code, 'codeConfigured': True, 'studentCodeRequired': not ctx.get('local')}
             if teacher:
                 info['classCodes'] = self.class_codes(fresh=True)
+                info['testCodes'] = dict(self._tcodes)
             return 200, info
         if path == '/api/settings':
             return 200, self.settings(teacher)
@@ -747,6 +759,26 @@ class Api:
             st['notesRev'] = st.get('notesRev', 0) + 1
             self.r(['SET', P + 'notes:' + sid, json.dumps(notes)], ['SET', P + 'st:' + sid, json.dumps(st)])
             return 200, {'ok': True, 'notes': notes}
+        if path == '/api/exam/join':
+            # A student opens the running test of their class with the test password of the class.
+            cls = g if g != '*' else clean_text(data.get('className'), 20)
+            ctl = jload(self.r(['HGET', P + 'classctl', cls or '_none'])[0], {}) or {}
+            exam = ctl.get('exam') or {}
+            if not exam.get('active') or time.time() > exam.get('endsAt', 0):
+                return 404, {'error': 'There is no test open for your class right now.'}
+            given = re.sub(r'\s+', '', str(data.get('testCode') or ''))
+            if g != '*' and given != self.test_codes().get(cls):
+                return 403, {'error': 'Wrong test password. Ask your teacher.'}
+            sid = str(data.get('studentId') or '')
+            if sid:
+                if not ID.fullmatch(sid):
+                    return 400, {'error': 'bad request'}
+                res = jload(self.r(['HGET', P + 'examres:' + exam['id'], sid])[0], {}) or {}
+                if not res.get('joined'):
+                    res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': cls, 'joined': time.time(), 'updatedAt': time.time()})
+                    res.setdefault('challenges', {})
+                    self.r(['HSET', P + 'examres:' + exam['id'], sid, json.dumps(res)])
+            return 200, {'ok': True, 'exam': exam}
         if path == '/api/exam/result':
             # A student checked a solution during an exam: keep the best score (and its program) per challenge.
             sid, eid, chid = str(data.get('studentId', '')), str(data.get('examId', '')), str(data.get('challengeId', ''))
@@ -758,6 +790,8 @@ class Api:
                 return 404, {'error': 'no such exam'}
             if time.time() > (exam.get('stoppedAt') or exam['endsAt']) + EXAM_GRACE:
                 return 409, {'error': 'the exam is over'}
+            if g != '*' and not res.get('joined'):
+                return 403, {'error': 'open the test with its password first'}
             res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': exam.get('className'), 'updatedAt': time.time()})
             best = res.setdefault('challenges', {}).get(chid)
             score = max(0, min(100, int(data.get('score') or 0)))
@@ -803,6 +837,11 @@ class Api:
                 if len(vals) != len(set(vals)) or any(len(v) < 3 for v in vals):
                     return 400, {'error': 'each class needs its own code (at least 3 characters)'}
                 new['classCodes'] = merged
+            if isinstance(data.get('testCodes'), dict):
+                tc = {clean_text(c, 20): re.sub(r'\s+', '', str(v or ''))[:20] for c, v in data['testCodes'].items()}
+                if any(v and len(v) < 3 for v in tc.values()):
+                    return 400, {'error': 'a test password has at least 3 characters'}
+                new['testCodes'] = {c: v for c, v in {**(new.get('testCodes') or {}), **tc}.items() if v}
             new.pop('studentCode', None)
             self.r(['SET', P + 'settings', json.dumps(new)])
             self._codes_t = 0

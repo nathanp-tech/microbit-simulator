@@ -206,9 +206,10 @@ function showShare(base) {
 async function showServerInfo() {
   try {
     const r = await tfetch('api/info');
-    const { ips, host, port, publicUrl, hosted, classCodes } = await r.json();
+    const { ips, host, port, publicUrl, hosted, classCodes, testCodes } = await r.json();
     T.hosted = !!hosted;
     T.classCodes = classCodes || {};
+    T.testCodes = testCodes || {};
     // the link and the QR code carry the code of the class: students who scan them get in directly
     if (publicUrl) showShare(publicUrl);
     else setTimeout(showServerInfo, 3000); // the public link takes a few seconds to open

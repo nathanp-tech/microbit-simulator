@@ -65,8 +65,9 @@ function classCtlHtml(c) {
   } else {
     exam = `<button class="mini" data-ctl="exam" data-class="${esc(c)}">📝 Start an exam</button>`;
   }
-  const code = (T.classCodes || {})[c];
+  const code = (T.classCodes || {})[c], tcode = (T.testCodes || {})[c];
   return `<span class="grp-ctl">${code ? `<span class="ctl-badge code" title="Code of this class (in its link and QR code)">🔑 ${esc(code)}</span>` : ''}
+    ${tcode ? `<span class="ctl-badge code" title="Test password of this class: give it to the students when the test starts (Manage → Class lists to change it)">📝 Test password ${esc(tcode)}</span>` : ''}
     ${ctl.paused ? '<span class="ctl-badge warn">⏸ paused</span>' : ''}${ctl.closed ? '<span class="ctl-badge warn">🔒 closed</span>' : ''}
     <button class="mini" data-ctl="msg" data-class="${esc(c)}" title="Show a message on every screen of this class">📢 Message</button>
     <button class="mini${ctl.paused ? ' on' : ''}" data-ctl="pause" data-class="${esc(c)}" title="Freeze the screens to get attention">${ctl.paused ? '▶ Resume' : '⏸ Pause screens'}</button>
@@ -108,7 +109,7 @@ function messageDialog(c) {
 function examDialog(c) {
   const today = new Date().toLocaleDateString();
   openModal(`<h2>📝 Start an exam for ${esc(c)}</h2>
-    <p class="muted">The students of ${esc(c)} are switched to the exam at once (within a few seconds). Each challenge starts from an empty program. Only their best "Check my answer" counts; the score becomes a Swiss grade.</p>
+    <p class="muted">The students of ${esc(c)} open it with the <b>test password ${esc((T.testCodes || {})[c] || '')}</b> (the 📝 Test card on the welcome page, or the window that appears on their screen). Each challenge starts from an empty program; their best submitted program counts and the score becomes a Swiss grade.</p>
     <div class="exam-form">
       <label>Title <input id="exTitle" value="Exam ${esc(c)} · ${esc(today)}"></label>
       <label>Duration <input id="exMin" type="number" min="1" max="240" value="40" style="width:70px"> minutes</label>
@@ -123,7 +124,9 @@ function examDialog(c) {
     if (!challenges.length) { alert('Choose at least one challenge.'); return; }
     try {
       await tpost('api/exam', { action: 'start', className: c, title: $('exTitle').value, minutes: Number($('exMin').value) || 30, hints: $('exHints').checked, challenges });
-      closeModal();
+      const tcode = (T.testCodes || {})[c];
+      if (tcode) openModal(`<div class="big-share"><h2>📝 ${esc(c)} · The test is open</h2><p>Click <b>📝 Test</b>, then type the test password:</p><div style="font-size:72px;font-weight:800;letter-spacing:10px;margin:10px 0">${esc(tcode)}</div><div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div></div>`);
+      else closeModal();
       await refreshLive();
     } catch (e) { alert(e.message); }
   };
@@ -374,16 +377,18 @@ function resetParts(work, parts) {
 }
 
 // ---------- Manage: class lists ----------
-let rosterDraft = null, codesDraft = null;
+let rosterDraft = null, codesDraft = null, testDraft = null;
 const newCode = (used) => { let c; do { c = String(Math.floor(200000 + Math.random() * 799999)); } while (used.includes(c)); return c; };
 function renderRosterEditor() {
   if (!rosterDraft) rosterDraft = JSON.parse(JSON.stringify(teacherRoster()));
   if (!codesDraft) codesDraft = { ...(T.classCodes || {}) };
+  if (!testDraft) testDraft = { ...(T.testCodes || {}) };
   $('rosterSource').textContent = T.roster ? '' : '(default lists from js/roster.js: saving stores them online)';
   const classes = Object.keys(rosterDraft).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   $('rosterEditor').innerHTML = classes.map((c) => `<div class="roster-class"><div class="actions"><b>🏫 ${esc(c)}</b><span class="muted">${rosterDraft[c].length} students</span><span class="spacer" style="flex:1"></span>
       <button class="mini danger" data-roster-del="${esc(c)}" title="Remove this class from the lists">✕</button></div>
-      <div class="actions code-row">🔑 <input data-code="${esc(c)}" value="${esc(codesDraft[c] || '')}" placeholder="new" size="8" title="Code of this class: it only opens this class"><button class="mini" data-newcode="${esc(c)}" title="New random code (the old one stops working)">↻</button></div>
+      <div class="actions code-row">🔑 <input data-code="${esc(c)}" value="${esc(codesDraft[c] || '')}" placeholder="new" size="8" title="Code of this class: it only opens this class"><button class="mini" data-newcode="${esc(c)}" title="New random code (the old one stops working)">↻</button>
+        <span style="margin-left:14px">📝 Test password</span> <input data-tcode="${esc(c)}" value="${esc(testDraft[c] || '')}" placeholder="new" size="6" title="Students type it to open a test of this class"><button class="mini" data-newtcode="${esc(c)}" title="New random test password">↻</button></div>
       <textarea data-roster="${esc(c)}" rows="${Math.min(16, Math.max(4, rosterDraft[c].length + 1))}">${esc(rosterDraft[c].join('\n'))}</textarea></div>`).join('')
     || '<p class="muted">No class yet: add one or paste your lists from Excel.</p>';
   $('rosterEditor').querySelectorAll('[data-roster]').forEach((t) => {
@@ -391,6 +396,12 @@ function renderRosterEditor() {
   });
   $('rosterEditor').querySelectorAll('[data-code]').forEach((t) => {
     t.oninput = () => { codesDraft[t.dataset.code] = t.value.trim(); $('rosterMsg').textContent = 'Not saved yet.'; };
+  });
+  $('rosterEditor').querySelectorAll('[data-tcode]').forEach((t) => {
+    t.oninput = () => { testDraft[t.dataset.tcode] = t.value.trim(); $('rosterMsg').textContent = 'Not saved yet.'; };
+  });
+  $('rosterEditor').querySelectorAll('[data-newtcode]').forEach((b) => {
+    b.onclick = () => { testDraft[b.dataset.newtcode] = String(Math.floor(2000 + Math.random() * 7999)); renderRosterEditor(); $('rosterMsg').textContent = 'New test password: not saved yet.'; };
   });
   $('rosterEditor').querySelectorAll('[data-newcode]').forEach((b) => {
     b.onclick = () => { codesDraft[b.dataset.newcode] = newCode(Object.values(codesDraft)); renderRosterEditor(); $('rosterMsg').textContent = 'New code: not saved yet.'; };
@@ -431,11 +442,14 @@ function setupRosterEditor() {
       const d = await tpost('api/roster', { roster: rosterDraft });
       T.roster = d.roster;
       const codes = Object.fromEntries(Object.keys(d.roster).map((c) => [c, codesDraft[c] || d.classCodes[c]]));
-      const st = await tpost('api/settings', { classCodes: codes });
+      const tcodes = Object.fromEntries(Object.keys(d.roster).map((c) => [c, testDraft[c] || '']).filter(([, v]) => v));
+      const st = await tpost('api/settings', { classCodes: codes, testCodes: tcodes });
       T.classCodes = st.classCodes || d.classCodes;
+      T.testCodes = st.testCodes || T.testCodes;
       if (T.publicBase) showShare(T.publicBase);
       rosterDraft = null;
       codesDraft = null;
+      testDraft = null;
       refreshClasses();
       renderRosterEditor();
       renderManage();

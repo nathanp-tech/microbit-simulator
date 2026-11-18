@@ -665,6 +665,7 @@ function startSession(data, { quiet = false } = {}) {
 }
 let choosing = false;
 async function chooseMode(mode) {
+  if (mode === 'test') return startTest();
   if (choosing) return;
   choosing = true;
   document.querySelectorAll('.choice').forEach((b) => { b.disabled = true; });
@@ -672,6 +673,21 @@ async function chooseMode(mode) {
     choosing = false;
     document.querySelectorAll('.choice').forEach((b) => { b.disabled = false; });
   }
+}
+// 📝 Test: the password first (no session yet), then the student's work, then the test opens.
+function startTest() {
+  if (!$('wName').value.trim()) { $('wError').textContent = 'Choose your class and your name first.'; return; }
+  $('wError').textContent = '';
+  askTestCode(null, async (code, exam) => {
+    CR.askedExam = exam.id; // no second password window when the class controls arrive
+    await chooseModeNow('guided');
+    if (!Progress.data) return;
+    try {
+      await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testCode: code, className: Progress.data.className, studentId: Progress.data.studentId, name: Progress.data.name }) });
+    } catch (e) { /* the results say "open the test first" only if this never arrives: it is tried again below */ }
+    joinExam(exam);
+  });
 }
 async function chooseModeNow(mode) {
   const name = $('wName').value.trim(), cls = $('wClass').value.trim();
@@ -1204,7 +1220,10 @@ async function devHook() {
   if (p.get('student')) {
     const [cls, name] = p.get('student').split(':');
     pickClass(cls); pickName(name);
-    await chooseModeNow(p.get('mode') || 'guided');
+    if (p.get('mode') === 'test') {
+      startTest();
+      if (p.get('tcode')) { await new Promise((r) => setTimeout(r, 200)); $('tCode').value = p.get('tcode'); $('tCodeGo').click(); await new Promise((r) => setTimeout(r, 1500)); }
+    } else await chooseModeNow(p.get('mode') || 'guided');
     await new Promise((r) => setTimeout(r, 300));
   }
   if (p.get('adv')) { App.advanced = true; ws.updateToolbox(toolboxDef()); }

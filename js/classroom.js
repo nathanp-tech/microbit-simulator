@@ -163,13 +163,47 @@ Sync.onClassCtl = (ctl) => {
 const examLive = (e) => e && e.active && Sync.now() < e.endsAt * 1000;
 function handleExam(e) {
   if (e && Progress.data.className && e.className !== Progress.data.className) e = null;
+  CR.openExam = examLive(e) ? e : null;
   if (examLive(e)) {
-    if (!App.exam || App.exam.id !== e.id) startExam(e);
-    else App.exam = e;
+    if (App.exam && App.exam.id === e.id) App.exam = e;
+    else if (((Progress.data.exams || {})[e.id] || {}).joined) startExam(e); // already opened with the password (page reloaded)
+    else if (CR.askedExam !== e.id) { CR.askedExam = e.id; askTestCode(e); }
     return;
   }
   if (!App.exam) return;
   if (e && e.id === App.exam.id) { if (!CR.examOver) finishExam(); } else leaveExam();
+}
+// The test opens with the test password of the class (the teacher gives it at the start).
+function askTestCode(e, onOk) {
+  openModal(`<h2>📝 Test</h2><p>${e ? `<b>${esc(e.title)}</b> · ${e.minutes} min. ` : ''}Type the <b>test password</b> your teacher gives you.</p>
+    <div class="wcode"><input id="tCode" autocomplete="off" inputmode="numeric" placeholder="password"><button class="primary" id="tCodeGo">Start the test</button></div>
+    <p id="tCodeErr" class="werr"></p><div style="text-align:right"><button onclick="closeModal()">Cancel</button></div>`);
+  const input = $('tCode'), go = $('tCodeGo');
+  input.focus();
+  const submit = async () => {
+    const code = input.value.trim();
+    if (!code) { input.focus(); return; }
+    go.disabled = true;
+    $('tCodeErr').textContent = '';
+    try {
+      const cls = Progress.data ? Progress.data.className : $('wClass').value.trim();
+      const body = { testCode: code, className: cls };
+      if (Progress.data) Object.assign(body, { studentId: Progress.data.studentId, name: Progress.data.name });
+      const r = await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { $('tCodeErr').textContent = d.error || 'The class server does not answer. Try again.'; return; }
+      closeModal();
+      if (onOk) await onOk(code, d.exam);
+      else joinExam(d.exam);
+    } catch (err) { $('tCodeErr').textContent = 'The class server does not answer. Try again.'; } finally { go.disabled = false; }
+  };
+  go.onclick = submit;
+  input.onkeydown = (ev) => { if (ev.key === 'Enter') submit(); };
+}
+function joinExam(e) {
+  examEntry(e).joined = Date.now();
+  Progress.persist();
+  if (!App.exam || App.exam.id !== e.id) startExam(e);
 }
 function examEntry(exam = App.exam) {
   const all = Progress.data.exams || (Progress.data.exams = {});

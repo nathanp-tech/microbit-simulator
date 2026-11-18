@@ -17,7 +17,7 @@ CODES = {}  # class codes, read from the server below (one per class)
 
 
 def call(method, path, body=None, teacher=False, code=None, klass=None, cls='Tech5ENe'):
-    headers = {'Content-Type': 'application/json'}
+    headers = {'Content-Type': 'application/json', 'Cf-Ray': 'apitest'}  # another computer, not the class server's own one
     if teacher:
         headers['X-Teacher-Code'] = code or CODE
     else:
@@ -116,6 +116,12 @@ call('POST', '/api/classctl', {'classes': ['Tech5ENe'], 'closed': False, 'messag
 s, r = call('POST', '/api/exam', {'action': 'start', 'className': 'Tech5ENe', 'challenges': ['c1', 'c2'], 'minutes': 20, 'hints': False, 'title': 'Test'}, teacher=True)
 check(s == 200, 'exam started'); eid = r['exam']['id']
 s, r = call('GET', '/api/student/' + A + '?className=Tech5ENe'); ex = r['classctl'].get('exam') or {}; check(ex.get('active') and ex.get('id') == eid, 'student sees the exam')
+s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c1', 'score': 60}); check(s == 403, 'result refused before the test password')
+s, r = call('GET', '/api/info', teacher=True); TCODE = (r.get('testCodes') or {}).get('Tech5ENe'); check(bool(TCODE), 'teacher sees the test password', r.get('testCodes'))
+s, r = call('POST', '/api/exam/join', {'testCode': 'nope', 'studentId': A}); check(s == 403, 'wrong test password refused')
+s, r = call('POST', '/api/exam/join', {'testCode': TCODE, 'studentId': B}, cls='Tech5ENd'); check(s == 404, 'no test for another class')
+s, r = call('POST', '/api/exam/join', {'testCode': TCODE}); check(s == 200 and r['exam']['id'] == eid, 'test password checked (no student yet)')
+s, r = call('POST', '/api/exam/join', {'testCode': TCODE, 'studentId': A, 'name': 'Ana'}); check(s == 200, 'student joins the test')
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c1', 'score': 60, 'program': {'a': 1}}); check(r.get('best') == 60, 'exam result')
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c1', 'score': 40, 'program': {'a': 2}}); check(r.get('best') == 60, 'best score kept')
 s, r = call('POST', '/api/exam/result', {'studentId': A, 'examId': eid, 'challengeId': 'c9', 'score': 100}); check(s == 404, 'challenge outside the exam refused')
