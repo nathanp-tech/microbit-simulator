@@ -33,7 +33,8 @@ function liveStatus(s) {
   const age = T.serverNow - (s.receivedAt || 0);
   const cur = s.challenges && s.challenges[s.current];
   const ex = s.live && s.live.exam;
-  if (ex && !ex.over && !ex.done && (ex.away || age > ONLINE_SECONDS || s.live.status === 'left')) {
+  if (ex && ex.practice && age <= ONLINE_SECONDS && s.live.status !== 'left') return { cls: '', text: ex.over || ex.done ? '🧪 Blank test finished' : `🧪 Blank test · ${esc(chShort(ex.challenge))}` };
+  if (ex && !ex.practice && !ex.over && !ex.done && (ex.away || age > ONLINE_SECONDS || s.live.status === 'left')) {
     const why = ex.away ? 'NOT on the test page' : 'test page closed';
     return { cls: 'away', text: `🚨 ${why}${ex.awayN ? ` <span class="away-n">· left ${ex.awayN}× · ${fmtTime(Math.round((ex.awayMs || 0) / 1000))}</span>` : ''}` };
   }
@@ -652,7 +653,8 @@ function renderWatchQuiz(ch, entry) {
   const answers = (entry && entry.answers) || [];
   const res = gradeQuiz(ch, answers);
   box.innerHTML = `<h3 style="margin-top:0">❓ ${esc(ch.title)} · ${answers.filter((a) => a !== null && a !== undefined).length} / ${ch.questions.length} answered · ${res.score} % right</h3>`
-    + ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}</p>${q.options.map((o, k) => `<div class="wq-opt${k === q.answer ? ' right' : ''}${answers[i] === k ? (k === q.answer ? ' picked-ok' : ' picked-ko') : ''}">${answers[i] === k ? (k === q.answer ? '✔' : '✖') : k === q.answer ? '○' : '·'} ${esc(o)}</div>`).join('')}</div>`).join('');
+    + ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => { const p = quizPicked(q, answers[i], k), r = quizRight(q, k); return `<div class="wq-opt${r ? ' right' : ''}${p ? (r ? ' picked-ok' : ' picked-ko') : ''}">${p ? (r ? '✔' : '✖') : r ? '○' : '·'} ${esc(o)}</div>`; }).join('')}</div>`).join('');
+  renderQuizCode(box, ch.questions);
   W.mb = null;
   $('wResult').textContent = entry && nb(entry.bestScore) !== null ? `Best check: ${nb(entry.bestScore)} %` : '';
   $('wCriteria').innerHTML = '';

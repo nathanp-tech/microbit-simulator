@@ -498,7 +498,7 @@ function showWelcome() {
   if (saved && saved.name && saved.type === 'mb-progress') {
     const done = Object.values(saved.challenges || {}).filter((c) => c.status === 'validated').length;
     btn.textContent = `↩ Continue as ${saved.name}${saved.className ? ' (' + saved.className + ')' : ''} · ${saved.mode === 'free' ? 'free programming' : done + ' / ' + CHALLENGES.length + ' challenges'}`;
-    btn.hidden = false;
+    btn.hidden = true; // only the blank test and the test now: the student chooses one of them
     btn.onclick = () => startSession(Progress.load(saved));
   } else btn.hidden = true;
   App.exam = null;
@@ -658,8 +658,6 @@ function onDeleted() {
   $('wError').textContent = 'Your teacher reset your work. Choose your name to start again.';
 }
 function applyClassSettings() {
-  document.querySelector('.choice.guided').hidden = CLASSROOM.allowGuided === false;
-  document.querySelector('.choice.free').hidden = CLASSROOM.allowFree === false;
   $('mSwitch').disabled = !!App.exam || ['guided', 'free'].filter(modeAllowed).length < 2;
 }
 function startSession(data, { quiet = false } = {}) {
@@ -674,6 +672,7 @@ function startSession(data, { quiet = false } = {}) {
 let choosing = false;
 async function chooseMode(mode) {
   if (mode === 'test') return startTest();
+  if (mode === 'blank') return startBlankTest();
   if (choosing) return;
   choosing = true;
   document.querySelectorAll('.choice').forEach((b) => { b.disabled = true; });
@@ -681,6 +680,28 @@ async function chooseMode(mode) {
     choosing = false;
     document.querySelectorAll('.choice').forEach((b) => { b.disabled = false; });
   }
+}
+// 🧪 Blank test: a practice test of 40 minutes, started by the student (no password, nothing sent as an exam result)
+let startingBlank = false;
+async function startBlankTest() {
+  if (startingBlank) return;
+  if (!$('wName').value.trim()) { $('wError').textContent = 'Choose your class and your name first.'; return; }
+  $('wError').textContent = '';
+  startingBlank = true;
+  try {
+    await chooseModeNow('guided');
+    if (!Progress.data || $('welcome').hidden === false) return;
+    const now = Sync.now() / 1000;
+    let e = Progress.data.blankTest;
+    const old = e && (now > e.endsAt || ((Progress.data.exams || {})[e.id] || {}).done);
+    if (!e || old) {
+      e = { id: 'p' + Date.now().toString(36), practice: true, title: 'Blank test', className: Progress.data.className, challenges: BLANK_TEST.slice(),
+        minutes: 40, hints: false, startedAt: now, endsAt: now + 40 * 60, stoppedAt: null, active: true };
+      Progress.data.blankTest = e;
+      Progress.persist();
+    }
+    startExam(e);
+  } finally { startingBlank = false; }
 }
 // 📝 Test: the password first (no session yet), then the student's work, then the test opens.
 function startTest() {
@@ -724,7 +745,7 @@ async function openWorkFile(file) {
   try { startSession(Progress.load(JSON.parse(await file.text()))); } catch (e) { $('wError').textContent = 'Cannot open this file: ' + e.message; }
 }
 async function exitSession() {
-  if (App.exam && !CR.examOver) { toast('📝 You cannot leave during the exam. Ask your teacher.'); return; }
+  if (App.exam && !CR.examOver && !App.exam.practice) { toast('📝 You cannot leave during the test. Ask your teacher.'); return; }
   storeWorkspace();
   const online = await Sync.push(liveState('left'), true);
   const saved = online || Progress.minutesSinceSave() < 0.5;
@@ -867,23 +888,32 @@ function showQuiz(slot) {
   const ch = App.challenge;
   $('blocklyDiv').style.visibility = 'hidden';
   $('quizView').hidden = false;
-  document.body.classList.add('quiz-mode'); // no simulator nor download during a quiz: less to look at
+  document.body.classList.add('quiz-mode'); // no simulator during a quiz: less to look at
   const answers = (slot && slot.answers) || [];
   const sent = !!App.exam && examSlot(ch.id).checks > 0; // in an exam the answers are sent once
   const marks = (!App.exam && slot && slot.quizMarks) || null;
+  const option = (q, i, o, k) => {
+    const picked = quizPicked(q, answers[i], k);
+    const mark = marks && picked ? (marks[i] ? ' right' : ' wrong') : '';
+    return `<label class="${picked ? 'picked' : ''}${mark}"><input type="${q.multi ? 'checkbox' : 'radio'}" name="q${i}" value="${k}"${picked ? ' checked' : ''}${sent ? ' disabled' : ''}> ${esc(o)}</label>`;
+  };
   $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)}</h2><p class="muted">${ch.description}</p>
-    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}</p>${q.options.map((o, k) => `<label class="${answers[i] === k ? 'picked' : ''}${marks && answers[i] === k ? (marks[i] ? ' right' : ' wrong') : ''}"><input type="radio" name="q${i}" value="${k}"${answers[i] === k ? ' checked' : ''}${sent ? ' disabled' : ''}> ${esc(o)}</label>`).join('')}</div>`).join('')}
+    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
     <div style="text-align:right;margin-top:10px">${sent ? '<b>✅ Your answers are sent.</b>' : `<button class="mc-btn green" id="quizCheck">${App.exam ? '📨 Send my answers' : '✅ Check my answers'}</button>`}</div></div>`;
-  $('quizView').querySelectorAll('input[type=radio]').forEach((r) => {
+  renderQuizCode($('quizView'), ch.questions);
+  $('quizView').querySelectorAll('input[type=radio], input[type=checkbox]').forEach((r) => {
     r.onchange = () => {
       const s = workSlot();
       if (!s) return;
+      const i = Number(r.name.slice(1)), q = ch.questions[i];
       s.answers = s.answers || [];
-      s.answers[Number(r.name.slice(1))] = Number(r.value);
+      if (q.multi) s.answers[i] = [...$('quizView').querySelectorAll(`input[name="q${i}"]:checked`)].map((x) => Number(x.value)).sort();
+      else s.answers[i] = Number(r.value);
       s.quizMarks = null;
       s.programAt = new Date().toISOString();
       Progress.persist();
-      showQuiz(s);
+      // only the labels change (the blocks of the questions stay drawn)
+      $('quizView').querySelectorAll(`input[name="q${i}"]`).forEach((x) => { x.parentElement.className = x.checked ? 'picked' : ''; });
     };
   });
   if ($('quizCheck')) $('quizCheck').onclick = evaluate;
@@ -906,7 +936,7 @@ async function evaluate() {
   let res;
   if (ch.quiz) {
     const answers = quizAnswers();
-    if (ch.questions.some((q, i) => answers[i] === undefined || answers[i] === null)) { toast('Answer every question first.'); return; }
+    if (ch.questions.some((q, i) => !quizAnswered(q, answers[i]))) { toast('Answer every question first.'); return; }
     if (App.exam && !(await confirmSend())) return;
     res = gradeQuiz(ch, answers);
     const slot = workSlot();
@@ -990,7 +1020,7 @@ function liveState(status) {
     status: status || (App.status === 'idle' ? 'editing' : App.status),
     mode: progressMode(),
     challenge: App.mode === 'challenge' && App.challenge ? App.challenge.id : null,
-    exam: App.exam ? { id: App.exam.id, challenge: App.examCh, over: CR.examOver, done: !!examEntry().done, ...awayInfo() } : null,
+    exam: App.exam ? { id: App.exam.id, practice: !!App.exam.practice, challenge: App.examCh, over: CR.examOver, done: !!examEntry().done, ...awayInfo() } : null,
     blocks: ws ? ws.getAllBlocks(false).filter((b) => !b.isShadow()).length : 0,
   };
 }

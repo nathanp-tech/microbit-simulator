@@ -173,6 +173,12 @@ const examLive = (e) => e && e.active && Sync.now() < e.endsAt * 1000;
 function handleExam(e) {
   if (e && Progress.data.className && e.className !== Progress.data.className) e = null;
   CR.openExam = examLive(e) ? e : null;
+  if (App.exam && App.exam.practice) {
+    // during the blank test: a real test that starts asks for its password (the blank test stops if the student joins)
+    if (examLive(e) && ((Progress.data.exams || {})[e.id] || {}).joined) startExam(e);
+    else if (examLive(e) && CR.askedExam !== e.id) { CR.askedExam = e.id; askTestCode(e); }
+    return;
+  }
   if (examLive(e)) {
     if (App.exam && App.exam.id === e.id) App.exam = e;
     else if (((Progress.data.exams || {})[e.id] || {}).joined) startExam(e); // already opened with the password (page reloaded)
@@ -224,7 +230,7 @@ function examSlot(id) {
   return slots[id] || (slots[id] = { program: null, robot: null, best: null, bestProgram: null, checks: 0, hints: 0 });
 }
 function startExam(e) {
-  if (!App.exam) storeWorkspace();
+  storeWorkspace(); // the work of before (or of the blank test) is kept
   App.exam = e;
   CR.examOver = false;
   examEntry(e);
@@ -238,7 +244,7 @@ function startExam(e) {
   if (examEntry(e).done) { showExamEnd(true); return; }
   const aw = examEntry(e).away;
   if (aw && aw.since) { aw.ms += Math.max(0, Date.now() - aw.since); aw.since = 0; } // the page was closed or reloaded
-  toast(`📝 The exam "${e.title}" has started. Good luck!`, 5000);
+  toast(e.practice ? '🧪 Blank test: 40 minutes, like the real test. Good luck!' : `📝 The exam "${e.title}" has started. Good luck!`, 5000);
   Progress.log('exam-start', null, e.id);
   Sync.push(liveState(), true);
 }
@@ -260,8 +266,8 @@ function renderExam() {
     return `<button class="mc-dot open${id === ch.id ? ' current' : ''}${s.checks ? ' sent' : ''}" data-ch="${esc(id)}" title="${esc(chTitle(id))}${s.checks ? ' · submitted' : ''}">${s.checks ? '✓' : i + 1}</button>`;
   }).join('');
   $('stepper').innerHTML = ''; // the steps are in the bar under the header
-  $('challengeTitle').textContent = `📝 ${chTitle(ch.id)}`;
-  $('challengeMeta').textContent = `📝 Exam · ${k + 1} of ${e.challenges.length}`;
+  $('challengeTitle').textContent = `${e.practice ? '🧪' : '📝'} ${chTitle(ch.id)}`;
+  $('challengeMeta').textContent = `${e.practice ? '🧪 Blank test' : '📝 Test'} · ${k + 1} of ${e.challenges.length}`;
   $('btnAllCh').hidden = true;
   $('btnHint').textContent = '💡 Need a hint?';
   $('btnSolution').hidden = true;
@@ -308,6 +314,7 @@ function onExamGrade(res) {
 }
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
 function queueExamResult(r) {
+  if (App.exam && App.exam.practice) return; // the blank test stays in the student's work
   if (App.exam && !r.away) { const a = awayInfo(); r.away = { n: a.awayN, ms: a.awayMs }; }
   (Progress.data.examQueue = Progress.data.examQueue || []).push(r);
   Progress.persist();
@@ -357,6 +364,19 @@ function finishExam(handedIn = false) {
 function showExamEnd(handedIn) {
   CR.examOver = true;
   closeModal();
+  if (App.exam.practice) {
+    // the blank test: the student sees their result (score of each part and the grade)
+    const sc = App.exam.challenges.map((id) => examSlot(id).best || 0);
+    const avg = Math.round(sc.reduce((a, b) => a + b, 0) / sc.length);
+    const prow = App.exam.challenges.map((id, i) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? sc[i] + ' %' : '— (nothing submitted)'}</b></td></tr>`).join('');
+    $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Average</b></td><td><b>${avg} % · grade ${swissGrade(avg).toFixed(1)}</b></td></tr></table>
+      <p class="muted">This was a practice test. In the real test, your teacher gives you the password.</p><button class="primary" id="blankHome">🏠 Back to the home page</button>`;
+    $('examOverlay').hidden = false;
+    $('blankHome').onclick = goHome;
+    renderStepBar();
+    updateExamBanner();
+    return;
+  }
   const rows = App.exam.challenges.map((id) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? '✓ submitted' : '—'}</b></td></tr>`).join('');
   $('examOverlayBody').innerHTML = handedIn
     ? `<div class="ov-icon">✅</div><h1>Test submitted</h1><table class="exam-res">${rows}</table><p class="muted">Well done! Your teacher has your work. Wait quietly until the end of the test.</p>`
@@ -382,7 +402,7 @@ function awayInfo() {
   return { away: !!a.since, awayN: a.n, awayMs: a.ms + (a.since ? Date.now() - a.since : 0) };
 }
 function setAway(away) {
-  if (!App.exam || !Progress.data) return;
+  if (!App.exam || !Progress.data || App.exam.practice) return;
   const e = examEntry(), a = e.away || (e.away = { n: 0, ms: 0, since: 0 });
   if (away && (CR.examOver || a.since)) return;
   if (!away && !a.since) return;
@@ -426,11 +446,19 @@ function leaveExam() {
   $('examOverlay').hidden = true;
   updateExamBanner();
   closeModal();
-  applyClassSettings();
-  setMode(appModeOf(Progress.data.mode || 'guided'), { initial: true });
-  updateButtons();
-  toast('📝 The exam is closed. You are back to your normal work.');
-  Sync.push(liveState(), true);
+  toast('📝 The test is closed.');
+  goHome();
+}
+// back to the home page (blank test or test): the work is saved, the student chooses again
+function goHome() {
+  if (Progress.data) { if (App.exam && !CR.examOver) storeWorkspace(); Progress.persist(); Sync.push(liveState('left'), true); }
+  App.exam = null;
+  App.examCh = null;
+  CR.examOver = false;
+  $('examOverlay').hidden = true;
+  closeModal();
+  Progress.data = null;
+  showWelcome();
 }
 
 // ---------- 🕓 Program history (the teacher sees each version) ----------

@@ -4,13 +4,14 @@
 'use strict';
 
 const CATEGORIES = [
-  { id: 'u1', icon: '💡', label: 'Unit 1 · Introduction' },
-  { id: 'u2', icon: '🎲', label: 'Unit 2 · Physical inputs' },
-  { id: 'u3', icon: '🌡️', label: 'Unit 3 · Sensors & variables' },
-  { id: 'u4', icon: '🔀', label: 'Unit 4 · Conditions' },
+  { id: 'blank', icon: '🧪', label: 'Blank test' },
+  { id: 'test', icon: '📝', label: 'Test' },
 ];
+// the two tests of 40 minutes: the blank test (practice, no password) and the test (password of the class)
+const BLANK_TEST = ['faces', 'dice-dots', 'light-a', 'quiz-blank'];
+const REAL_TEST = ['temp-b', 'rps', 'compass', 'quiz-test'];
 // Pictures in the missions: [[icon:Happy]] (an icon on the LEDs), [[text:3]] (a number or letters on the LEDs),
-// [[leds:all]] / [[leds:none]], [[btn:A]] (a button of the board), [[shake]].
+// [[leds:all]] / [[leds:none]], [[img:#.... ..... ..#.. ..... ....#]] (any picture), [[btn:A]] (a button of the board), [[shake]].
 function ledPicture(rows, title) {
   const cell = (r, c) => `<rect x="${3 + c * 9}" y="${3 + r * 9}" width="6" height="6" rx="1" fill="${rows[r][c] ? '#ff2a2a' : '#3a3a3a'}"/>`;
   let cells = '';
@@ -23,11 +24,35 @@ function richDesc(html) {
     if (kind === 'icon' && ICONS[arg]) return ledPicture(patternRows(ICONS[arg]), 'icon ' + iconLabel(arg));
     if (kind === 'text') return `<span class="d-text">${arg.split('').map((ch) => ledPicture(glyph(ch), ch)).join('')}</span>`;
     if (kind === 'leds') return ledPicture([0, 1, 2, 3, 4].map(() => [0, 1, 2, 3, 4].map(() => arg === 'all')), arg === 'all' ? 'all LEDs on' : 'screen cleared');
+    if (kind === 'img') return ledPicture(patternRows(arg), 'picture');
     if (kind === 'btn') return `<span class="d-btn">${arg}</span>`;
     if (kind === 'shake') return '<span class="d-shake">〰️ shake</span>';
     return m;
   });
 }
+// A program of a quiz question, drawn with the real MakeCode blocks (read only). Called after the HTML is in place.
+const quizWorkspaces = [];
+function renderQuizCode(root, questions) {
+  while (quizWorkspaces.length) { try { quizWorkspaces.pop().dispose(); } catch (e) { /* already gone */ } }
+  root.querySelectorAll('.q-code').forEach((div) => {
+    const q = questions[Number(div.dataset.q)];
+    if (!q || !q.code || typeof Blockly === 'undefined') return;
+    div.innerHTML = '';
+    const w = Blockly.inject(div, { readOnly: true, renderer: 'makecode', theme: MB_THEME, media: 'lib/blockly/media/', sounds: false,
+      move: { scrollbars: false, drag: false, wheel: false }, zoom: { controls: false, wheel: false, startScale: 0.8 } });
+    Blockly.serialization.workspaces.load(q.code, w);
+    const bb = w.getBlocksBoundingBox();
+    div.style.width = Math.ceil((bb.right - bb.left) * w.scale + 20) + 'px';
+    div.style.height = Math.ceil((bb.bottom - bb.top) * w.scale + 20) + 'px';
+    Blockly.svgResize(w);
+    w.getCanvas().setAttribute('transform', `translate(${10 - bb.left * w.scale},${10 - bb.top * w.scale}) scale(${w.scale})`);
+    quizWorkspaces.push(w);
+  });
+}
+// The answer of one question, as HTML (the student's choice or the right answer)
+const quizPicked = (q, given, k) => (q.multi ? Array.isArray(given) && given.includes(k) : given === k);
+const quizRight = (q, k) => (q.multi ? q.answer.includes(k) : q.answer === k);
+const quizAnswered = (q, given) => (q.multi ? Array.isArray(given) && given.length > 0 : given !== undefined && given !== null);
 const categoryOf = (ch) => CATEGORIES.find((c) => c.id === ch.cat) || CATEGORIES[0];
 
 // ---------- helpers for the tests ----------
@@ -58,44 +83,117 @@ const near = (nums, target, tol) => nums.some((n) => Math.abs(n - target) <= tol
 // show icon pauses 600 ms: a program that sets start after the heart measures 600 ms less (both are right)
 const nearReaction = (nums, r) => near(nums, r + 50, 200) || near(nums, r - 550, 200); // +100 ms: B counts when it is released
 
+// Dice faces: one LED = one dot
+const DICE_FACES = ['..... ..... ..#.. ..... .....', '#.... ..... ..... ..... ....#', '#.... ..... ..#.. ..... ....#',
+  '#...# ..... ..... ..... #...#', '#...# ..... ..#.. ..... #...#', '#...# ..... #...# ..... #...#'];
+// Programs shown in the quizzes (MakeCode blocks, read only)
+const QB = (() => {
+  const num = (n) => ({ shadow: { type: 'math_number', fields: { NUM: n } } });
+  const txt = (t) => ({ shadow: { type: 'text', fields: { TEXT: t } } });
+  const blk = (type, fields = {}, inputs = {}, extraState) => ({ type, fields, inputs, ...(extraState ? { extraState } : {}) });
+  const seq = (...bs) => { for (let i = 0; i < bs.length - 1; i++) bs[i].next = { block: bs[i + 1] }; return { block: bs[0] }; };
+  const prog = (...tops) => ({ blocks: { languageVersion: 0, blocks: tops.map((t, i) => ({ ...t, x: 10 + i * 280, y: 10 })) } });
+  const V = (name) => ({ name });
+  const getv = (name) => ({ block: blk('variables_get', { VAR: V(name) }) });
+  const sensor = (type) => ({ block: blk(type) });
+  const cmp = (a, op, b) => ({ block: blk('logic_compare', { OP: op }, { A: a, B: b }) });
+  const ifElse = (branches, elseBody) => {
+    const inputs = {};
+    branches.forEach(([cond, body], i) => { inputs['IF' + i] = cond; inputs['DO' + i] = seq(...body); });
+    if (elseBody) inputs.ELSE = seq(...elseBody);
+    return blk('controls_if', {}, inputs, { elseIfCount: branches.length - 1, hasElse: !!elseBody });
+  };
+  const str = (t) => blk('basic_show_string', {}, { TEXT: txt(t) });
+  return {
+    wrongButton: prog(blk('input_on_button', { BUTTON: 'B' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Heart' })) })),
+    lightMeter: prog(blk('basic_forever', {}, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: sensor('input_light_level') })) })),
+    shakeReset: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('count') }, { VALUE: num(0) }), blk('variables_change', { VAR: V('count') }, { VALUE: num(1) }), blk('basic_show_number', {}, { NUMBER: getv('count') })) })),
+    changeBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('score') }, { VALUE: num(3) }), blk('variables_change', { VAR: V('score') }, { VALUE: num(2) }), blk('basic_show_number', {}, { NUMBER: getv('score') })) })),
+    wrongCompass: prog(blk('basic_forever', {}, { HANDLER: seq(ifElse([
+      [cmp(sensor('input_compass'), 'LT', num(45)), [str('N')]],
+      [cmp(sensor('input_compass'), 'LT', num(135)), [str('W')]],
+      [cmp(sensor('input_compass'), 'LT', num(225)), [str('S')]],
+      [cmp(sensor('input_compass'), 'LT', num(315)), [str('E')]]], [str('N')])) })),
+  };
+})();
+// the letter of a compass heading (N 315–45, E 45–135, S 135–225, W 225–315)
+function compassRound(make, heading) {
+  const T = make().wait(1000); T.setHeading(heading); const t0 = T.t; T.wait(3000);
+  const t = T.texts(t0).map((x) => x.trim().toUpperCase()).filter(Boolean);
+  return t.length ? t[t.length - 1] : '';
+}
+
 const CHALLENGES = [
+  // ---------------- 🧪 Blank test ----------------
   {
-    id: 'mood', cat: 'u1', level: 1, title: 'Mood display', lesson: 'L2',
-    description: '<ul class="steps"><li>Press [[btn:A]] → show icon <b>Happy</b> [[icon:Happy]]</li><li>Press [[btn:B]] → show icon <b>Sad</b> [[icon:Sad]]</li><li>Press [[btn:A+B]] → your own reaction, for example [[icon:Surprised]] [[icon:Asleep]] [[icon:Angry]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, B, then A+B on the board.</p>',
-    skills: 'on button A / B / A+B pressed, show icon',
-    hints: ['Find "on button A pressed" in Input. Change A to B or A+B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
+    id: 'faces', cat: 'blank', level: 1, title: 'Happy and sad', lesson: 'Unit 1',
+    description: '<ul class="steps"><li>Press [[btn:A]] → show icon <b>Happy</b> [[icon:Happy]]</li><li>Press [[btn:B]] → show icon <b>Sad</b> [[icon:Sad]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, then B on the board.</p>',
+    skills: 'on button A / B pressed, show icon',
+    hints: ['Find "on button A pressed" in Input. Change A to B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
     tests: [
-      { label: 'Button A shows the happy face', points: 30, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('A').wait(1500); return T.sawPattern(ICONS.Happy, t0); } },
-      { label: 'Button B shows the sad face', points: 30, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('B').wait(1500); return T.sawPattern(ICONS.Sad, t0); } },
-      { label: 'A+B shows another reaction', points: 30, run: (make) => {
-        const T = make().wait(6000); const t0 = T.t; T.click('AB').wait(3000);
-        const r = reacted(T, t0).filter((k) => k !== patternKey(ICONS.Happy) && k !== patternKey(ICONS.Sad));
-        return r.length > 0;
-      } },
-      { label: 'The buttons work again and again', points: 10, run: (make) => {
+      { label: 'Button A shows the happy face', points: 40, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('A').wait(1500); return T.sawPattern(ICONS.Happy, t0) && !T.sawPattern(ICONS.Sad, t0); } },
+      { label: 'Button B shows the sad face', points: 40, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('B').wait(1500); return T.sawPattern(ICONS.Sad, t0) && !T.sawPattern(ICONS.Happy, t0); } },
+      { label: 'The buttons work again and again', points: 20, run: (make) => {
         const T = make().wait(6000); T.click('A', 1200); T.click('B', 1200); const t0 = T.t; T.click('A').wait(1500);
         return T.sawPattern(ICONS.Happy, t0);
       } },
     ],
   },
   {
-    id: 'dice', cat: 'u2', level: 1, title: 'Electronic dice', lesson: 'L3',
-    description: '<ul class="steps"><li>[[shake]] → show a number from <b>1 to 6</b>, for example [[text:4]]</li><li>Use <b>show number</b> and <b>pick random</b></li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> on the board, many times.</p>',
-    skills: 'on shake, pick random, show number',
-    hints: ['Put "show number" inside "on shake".', 'Drag "pick random 0 to 10" (Math) into show number, then change it: both ends are included!'],
+    id: 'dice-dots', cat: 'blank', level: 2, title: 'Dice with dots', lesson: 'Unit 2',
+    description: `<ul class="steps"><li>[[shake]] → set the variable <b>roll</b> to <b>pick random 1 to 6</b></li><li><b>if / else if</b>: show the dots of the dice with <b>show leds</b> (one LED = one dot):<br>${DICE_FACES.map((f, i) => `${i + 1} [[img:${f}]]`).join(' &nbsp;')}</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> many times: do all six faces appear?</p>`,
+    skills: 'on shake, variables, pick random, if / else if, show leds',
+    hints: ['Variables → Make a Variable… → roll. Then "set roll to pick random 1 to 6" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare "roll = 1", "roll = 2"… and put a "show leds" with the right dots in each part.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
-      const rolls = (make) => { const T = make(7).wait(3000); const out = []; for (let i = 0; i < 60; i++) { const t0 = T.t; T.shake(1800); out.push(T.numbers(t0)); } return out; };
+      // what is on the screen after each shake: the number of lit LEDs (the dots)
+      const rolls = (make) => { const T = make(7).wait(3000); const out = []; for (let i = 0; i < 60; i++) { const t0 = T.t; T.shake(1500); out.push(T.images(t0).length ? T.litCount() : 0); } return out; };
       return [
-        { label: 'A number appears after every shake', points: 35, run: (make) => { const r = rolls(make); return r.filter((n) => n.length).length / r.length >= 0.95 ? 1 : r.filter((n) => n.length).length / r.length * 0.8; } },
-        { label: 'The number is always between 1 and 6', points: 35, run: (make) => { const all = rolls(make).flat(); return all.length > 0 && all.every((n) => Number.isInteger(n) && n >= 1 && n <= 6); } },
-        { label: 'Every face from 1 to 6 can appear', points: 30, run: (make) => { const all = new Set(rolls(make).flat()); return [1, 2, 3, 4, 5, 6].filter((n) => all.has(n)).length / 6; } },
+        { label: 'Dots appear after every shake', points: 30, run: (make) => { const r = rolls(make); const k = r.filter((n) => n > 0).length / r.length; return k >= 0.95 ? 1 : k * 0.8; } },
+        { label: 'Always 1 to 6 dots', points: 35, run: (make) => { const r = rolls(make); return r.some((n) => n > 0) && r.every((n) => n >= 1 && n <= 6); } },
+        { label: 'All six faces can appear (1, 2, 3, 4, 5 and 6 dots)', points: 35, run: (make) => { const all = new Set(rolls(make)); return [1, 2, 3, 4, 5, 6].filter((n) => all.has(n)).length / 6; } },
       ];
     })(),
   },
   {
-    id: 'rps', cat: 'u2', level: 2, title: 'Rock Paper Scissors', lesson: 'L4',
+    id: 'light-a', cat: 'blank', level: 1, title: 'Light meter', lesson: 'Unit 3',
+    description: '<ul class="steps"><li>Press [[btn:A]] → <b>show number</b> of the <b>light level</b> (0 = dark, 255 = bright), for example [[text:9]][[text:0]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board), then press A.</p>',
+    skills: 'on button A pressed, light level, show number',
+    hints: ['Put "show number" inside "on button A pressed".', 'Drag "light level" (Input) into the show number block.'],
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
+    tests: [
+      { label: 'A shows the light level (dark: 30)', points: 50, run: (make) => { const T = make().wait(1500); T.setLight(30); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(30); } },
+      { label: 'A shows the light level (bright: 200)', points: 50, run: (make) => { const T = make().wait(1500); T.setLight(200); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(200); } },
+    ],
+  },
+  {
+    id: 'quiz-blank', cat: 'blank', level: 2, title: 'Quiz (blank test)', lesson: 'Units 1-4', quiz: true,
+    description: 'Six questions. Some show a program in blocks. In the test you send your answers only once.',
+    skills: 'Units 1-4',
+    questions: [
+      { q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
+      { q: 'Is button A an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
+      { q: 'Is the LED screen of the micro:bit an INPUT?', options: ['No, never', 'Yes: the LEDs also measure the light level', 'Yes: it detects the buttons', 'Only when it is off'], answer: 1 },
+      { q: 'This program should show a heart when you press A. What is wrong?', code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
+      { q: 'This program shows the light level. How can you make it show 0?', code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
+      { q: 'What does this program show?', code: QB.changeBy, options: ['2', '3', '5', '32'], answer: 2 },
+    ],
+  },
+  // ---------------- 📝 Test ----------------
+  {
+    id: 'temp-b', cat: 'test', level: 1, title: 'Thermometer', lesson: 'Unit 3',
+    description: '<ul class="steps"><li>Press [[btn:B]] → <b>show number</b> of the <b>temperature</b> (°C), for example [[text:2]][[text:1]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>thermometer</b> on the board, then press B.</p>',
+    skills: 'on button B pressed, temperature, show number',
+    hints: ['Put "show number" inside "on button B pressed".', 'Drag "temperature (°C)" (Input) into the show number block.'],
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
+    tests: [
+      { label: 'B shows the temperature (18 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(18); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(18); } },
+      { label: 'B shows the temperature (31 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(31); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(31); } },
+    ],
+  },
+  {
+    id: 'rps', cat: 'test', level: 2, title: 'Rock Paper Scissors', lesson: 'Unit 2',
     description: '<ul class="steps"><li>[[shake]] → set the variable <b>choice</b> to <b>pick random 0 to 2</b></li><li><b>if / else if / else</b>:<br>0 → rock [[icon:SmallSquare]] &nbsp; 1 → paper [[icon:Square]] &nbsp; 2 → scissors [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
     skills: 'variables, pick random, if / else if',
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
@@ -110,56 +208,29 @@ const CHALLENGES = [
     })(),
   },
   {
-    id: 'step-counter', cat: 'u3', level: 2, title: 'Step counter', lesson: 'L6',
-    description: '<ul class="steps"><li>The variable <b>steps</b> starts at <b>0</b></li><li>[[shake]] → steps goes up by <b>1</b> and the new number is <b>shown</b>: [[text:1]] then [[text:2]] then [[text:3]]…</li><li>Press [[btn:B]] → steps goes back to <b>0</b> (the next shake shows [[text:1]])</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 3 times (1, 2, 3), press B, then SHAKE again (1).</p>',
-    skills: 'variables: set, change; on shake; buttons',
-    hints: ['Variables → Make a Variable… → steps. In "on start": set steps to 0.', '"on shake": change steps by 1, then show number steps. "on button B pressed": set steps to 0.'],
-    tests: (() => {
-      // shakes 1.2 s apart (a number takes 750 ms to show); what was shown after each shake
-      const shakes = (T, n) => { const out = []; for (let i = 0; i < n; i++) { const t0 = T.t; T.shake(1200); out.push(T.numbers(t0)); } return out; };
-      const last = (nums) => (nums.length ? nums[nums.length - 1] : null);
-      return [
-        { label: 'Each shake adds 1 and shows the new number (1, 2, 3)', points: 35, run: (make) => { const T = make().wait(1500); return shakes(T, 3).map(last).join() === '1,2,3'; } },
-        { label: 'It keeps counting (10 shakes → 10)', points: 15, run: (make) => { const T = make().wait(1500); shakes(T, 10); T.wait(4000); return T.numbers().includes(10); } },
-        { label: 'B resets steps to 0 (the next shake shows 1)', points: 30, run: (make) => { const T = make().wait(1500); shakes(T, 3); T.click('B', 1500); return last(shakes(T, 1)[0]) === 1; } },
-        { label: 'After B, it counts again (1, 2)', points: 20, run: (make) => { const T = make().wait(1500); shakes(T, 3); T.click('B', 1500); return shakes(T, 2).map(last).join() === '1,2'; } },
-      ];
-    })(),
-  },
-  {
-    id: 'night-light', cat: 'u4', level: 2, title: 'Night light', lesson: 'L7 (A)',
-    description: '<ul class="steps"><li><b>forever</b>: check the <b>light level</b></li><li><b>if</b> light level <b>&lt;</b> your threshold (dark) → <b>all 25 LEDs on</b> [[leds:all]] (show leds)</li><li><b>else</b> → <b>clear screen</b> [[leds:none]]</li><li>Choose a threshold between 20 and 200</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board) down to dark, then up to bright.</p>',
-    skills: 'if / else, comparison, light level, threshold',
-    hints: ['forever → if (light level < 50) then show leds (all on) else clear screen.', 'First show the light level with show number to choose your threshold.'],
+    id: 'compass', cat: 'test', level: 2, title: 'Compass', lesson: 'Unit 4',
+    description: '<ul class="steps"><li><b>forever</b>: look at the <b>compass heading</b> (0 to 359°)</li><li><b>if / else if</b>: show the letter of the direction with <b>show string</b>:<br>less than 45 → [[text:N]] &nbsp; less than 135 → [[text:E]] &nbsp; less than 225 → [[text:S]] &nbsp; less than 315 → [[text:W]] &nbsp; else → [[text:N]]</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>logo</b> at the top of the board round and round: the heading changes (shown on the logo). Watch the letter.</p>',
+    skills: 'forever, compass heading, if / else if, comparison',
+    hints: ['forever → if (compass heading < 45) then show string "N", else if (compass heading < 135) then show string "E"…', 'Click ⊕ on the if block to add the "else if" parts. The last part (else) shows "N" again.'],
     tests: [
-      { label: 'In the dark, all the LEDs switch on', points: 35, run: (make) => { const T = make().wait(500); T.setLight(10).wait(2000); return T.litCount() === 25; } },
-      { label: 'In the light, the LEDs switch off', points: 35, run: (make) => { const T = make().wait(500); T.setLight(10).wait(2000); const on = T.litCount() === 25; T.setLight(230).wait(2000); return on && T.litCount() === 0; } },
-      { label: 'It keeps working (dark, light, dark again)', points: 30, run: (make) => { const T = make().wait(500); T.setLight(230).wait(2000); T.setLight(10).wait(2000); T.setLight(230).wait(2000); T.setLight(5).wait(2000); return T.litCount() === 25; } },
+      { label: 'Heading 10° shows N', points: 20, run: (make) => compassRound(make, 10) === 'N' },
+      { label: 'Heading 90° shows E', points: 20, run: (make) => compassRound(make, 90) === 'E' },
+      { label: 'Heading 180° shows S', points: 20, run: (make) => compassRound(make, 180) === 'S' },
+      { label: 'Heading 270° shows W', points: 20, run: (make) => compassRound(make, 270) === 'W' },
+      { label: 'Heading 350° shows N', points: 20, run: (make) => compassRound(make, 350) === 'N' },
     ],
   },
   {
-    id: 'reaction', cat: 'u4', level: 3, title: 'Reaction game', lesson: 'L8',
-    description: '<ul class="steps"><li>Press [[btn:A]] → set <b>ready</b> to 0, show "WAIT", pause <b>pick random 1000 to 4000</b> ms, show icon <b>Heart</b> [[icon:Heart]], set <b>start</b> to running time, set ready to 1</li><li>Press [[btn:B]] → <b>if</b> ready = 1: show number <b>running time − start</b> (for example <b>350</b> ms), <b>else</b>: show icon <b>Sad</b> [[icon:Sad]] (too early)</li></ul><p class="test-it">🧪 <b>Test it:</b> press A, wait for the heart, press B. Then press B too early.</p>',
-    skills: 'running time, pause, pick random, variables, conditions',
-    hints: ['A: set ready to 0, show string "WAIT", pause (pick random 1000 to 4000), show icon heart, set start to running time (ms), set ready to 1.', 'B: if ready = 1 then show number (running time (ms) − start) else show icon sad.'],
-    tests: [
-      { label: 'After A, a heart appears after a short wait', points: 25, run: (make) => { const T = make(3).wait(1500); const t0 = T.t; T.click('A'); const th = waitForPattern(T, ICONS.Heart, t0, 12000); return th !== null && th - t0 >= 900; } },
-      { label: 'The waiting time changes every time', points: 15, run: (make) => { const d = [3, 5, 8].map((s) => { const T = make(s).wait(1500); const t0 = T.t; T.click('A'); const th = waitForPattern(T, ICONS.Heart, t0, 12000); return th === null ? null : Math.round((th - t0) / 50); }).filter((x) => x !== null); return distinct(d).length >= 2; } },
-      { label: 'B after the heart shows the reaction time (not the sad face)', points: 35, run: (make) => { const T = make(3).wait(1500); const r = reactionRound(T, 1100); return r.heart !== null && nearReaction(r.numbers, 1100) && !r.sad; } },
-      { label: 'B too early shows the sad icon (not a time)', points: 25, run: (make) => { const T = make(3).wait(1500); T.click('A', 300); const t1 = T.t; T.click('B').wait(1500); return T.sawPattern(ICONS.Sad, t1) && !T.numbers(t1).length; } },
-    ],
-  },
-  {
-    id: 'quiz-final', cat: 'u4', level: 2, title: 'Quiz: Units 1 to 4', lesson: 'L8', quiz: true,
-    description: 'Six questions on Units 1 to 4: inputs and outputs, events, sensors, variables, if / else and time. In the exam you send your answers only once.',
+    id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
+    description: 'Six questions. Some show a program in blocks. You send your answers only once.',
     skills: 'Units 1-4',
     questions: [
-      { q: 'Which one is an INPUT?', options: ['The LED screen', 'Button A', 'show icon', 'The speaker'], answer: 1 },
-      { q: 'Which block runs its code when you shake the micro:bit?', options: ['on start', 'forever', 'on shake', 'show number'], answer: 2 },
-      { q: 'What does the light level sensor give?', options: ['A number from 0 (dark) to 255 (bright)', 'A number from 0 to 359', 'Only ON or OFF', 'A temperature in °C'], answer: 0 },
-      { q: 'steps is 4. Then "change steps by 1" runs. What is steps now?', options: ['1', '4', '5', '41'], answer: 2 },
-      { q: 'if light level < 50 then show icon Heart, else clear screen. The light level is 120. What happens?', options: ['The heart is shown', 'The screen is cleared', 'The program stops', 'Both'], answer: 1 },
-      { q: 'start is 5200. Now running time (ms) is 5450. What is the reaction time?', options: ['250 ms', '5450 ms', '10650 ms', '52 ms'], answer: 0 },
+      { q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
+      { q: 'Is the LED screen an output?', options: ['Yes: it shows pictures, numbers and text', 'No: it is only an input', 'No: it is a sensor', 'Only with the radio'], answer: 0 },
+      { q: 'What is a variable?', options: ['A box with a name that keeps a value; the value can change', 'A block that repeats forever', 'A sensor of the micro:bit', 'A picture on the LED screen'], answer: 0 },
+      { q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
+      { q: 'This compass shows the wrong letter when you face East or West. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Swap the letters N and S', 'Change 45 to 90', 'Use the temperature instead of the compass heading'], answer: 0 },
+      { q: 'Is the temperature sensor an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
     ],
   },
 ];

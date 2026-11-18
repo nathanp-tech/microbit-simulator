@@ -217,7 +217,8 @@ body.mc .welcome { background: linear-gradient(135deg, #3454D1, #6633cc); }
 body.mc .brand .logo { background: var(--mc-blue); }
 body.mc button.primary { background: var(--mc-blue); border-color: var(--mc-blue); }
 body.mc .choice.guided:hover { border-color: var(--mc-blue); background: #f0f3ff; }
-body.mc .choices { grid-template-columns: 1fr 1fr 1fr; }
+body.mc .choices { grid-template-columns: 1fr 1fr; }
+body.mc .choice.blank:hover { border-color: #0f8a8c; background: #eefafa; }
 body.mc .choice.test:hover { border-color: #5b3cc4; background: #f4f0ff; }
 @media (max-width: 760px) { body.mc .choices { grid-template-columns: 1fr; } }
 body.mc.preview #mcHeader { background: #b36b00; }
@@ -387,3 +388,7 @@ body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, bo
 .mc-mission .desc .d-shake { display: inline-block; border: 2px solid #d6dbe8; border-radius: 12px; padding: 0 8px; font-weight: 700; font-size: 13px; background: #fff; }
 .sb-finish { white-space: nowrap; border: none; border-radius: 14px; background: #107c10; color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; margin-left: 6px; box-shadow: 0 2px 0 #0b5a0b; }
 .sb-finish:hover { background: #0e6e0e; }
+.mc-tut[data-unit="blank"] .mc-tut-head { background: linear-gradient(135deg, #0f8a8c, #3454D1); }
+.mc-tut[data-unit="test"] .mc-tut-head { background: linear-gradient(135deg, #6633cc, #b4009e); }
+.mc-tut[data-unit="blank"] .mc-mission-label { color: #0f8a8c; }
+.mc-tut[data-unit="test"] .mc-mission-label { color: #6633cc; }

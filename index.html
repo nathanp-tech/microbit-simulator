@@ -132,15 +132,14 @@
       <div id="wMe" class="wme" hidden><span id="wMeText"></span> <button id="wChange" class="link">Not you? Change</button></div>
       <p class="wq" id="wModeTitle">What do you want to do?</p>
       <div class="choices" id="wChoices">
-        <button class="choice guided" data-mode="guided"><span class="cicon">🧭</span><b>Challenges</b><span>The challenges of your lessons, one after the other. Check your answer to unlock the next one.</span></button>
-        <button class="choice free" data-mode="free"><span class="cicon">🛠️</span><b>Free programming</b><span>Build and test any program you like in the simulator.</span></button>
+        <button class="choice blank" data-mode="blank"><span class="cicon">🧪</span><b>Blank test</b><span>A practice test of 40 minutes, like the real one. No password. You see your result at the end.</span></button>
         <button class="choice test" data-mode="test"><span class="cicon">📝</span><b>Test</b><span>Only when your teacher says so. You need the test password.</span></button>
       </div>
-      <p class="muted wsave">☁️ Your work is saved automatically. Next time, choose your class and your name again to continue.</p>
+      <p class="muted wsave">☁️ Your work is saved automatically.</p>
       <p id="wError" class="werr"></p>
       <div class="welcome-alt">
-        <button id="wContinue" hidden></button>
-        <button id="wOpen">📂 Continue from my saved file</button>
+        <button id="wContinue" hidden style="display:none"></button>
+        <button id="wOpen" hidden style="display:none">📂 Continue from my saved file</button>
         <input type="file" id="wFile" accept=".json" hidden>
         <span style="flex:1"></span>
         <button id="wTeacher" class="link" title="Teacher dashboard (password)">👩‍🏫 Teacher</button>

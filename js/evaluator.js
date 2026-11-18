@@ -111,10 +111,17 @@ function programFromState(state) {
 // Quizzes: answers -> score
 function gradeQuiz(ch, answers) {
   const criteria = ch.questions.map((q, i) => {
-    const ok = answers && answers[i] === q.answer;
-    return { label: `${i + 1}. ${q.q}`, points: ok ? 1 : 0, max: 1, ok, given: answers ? answers[i] : null };
+    const given = answers ? answers[i] : null;
+    let pts;
+    if (q.multi) {
+      // tick all the right ones: +1 per right tick, −1 per wrong tick (never below 0)
+      const g = Array.isArray(given) ? given : [];
+      const hits = g.filter((k) => q.answer.includes(k)).length, wrong = g.length - hits;
+      pts = Math.max(0, (hits - wrong) / q.answer.length);
+    } else pts = given === q.answer ? 1 : 0;
+    return { label: `${i + 1}. ${q.q}`, points: Math.round(pts * 100) / 100, max: 1, ok: pts === 1, given };
   });
-  const pts = criteria.filter((c) => c.ok).length;
+  const pts = criteria.reduce((a, c) => a + c.points, 0);
   const score = Math.round(pts / ch.questions.length * 100);
   return { score, criteria, trials: [{ score, criteria }] };
 }

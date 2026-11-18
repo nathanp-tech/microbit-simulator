@@ -111,11 +111,11 @@ function examDialog(c) {
   openModal(`<h2>📝 Start an exam for ${esc(c)}</h2>
     <p class="muted">The students of ${esc(c)} open it with the <b>test password ${esc((T.testCodes || {})[c] || '')}</b> (the 📝 Test card on the welcome page, or the window that appears on their screen). Each challenge starts from an empty program; their best submitted program counts and the score becomes a Swiss grade.</p>
     <div class="exam-form">
-      <label>Title <input id="exTitle" value="Exam ${esc(c)} · ${esc(today)}"></label>
+      <label>Title <input id="exTitle" value="Test ${esc(c)} · ${esc(today)}"></label>
       <label>Duration <input id="exMin" type="number" min="1" max="240" value="40" style="width:70px"> minutes</label>
       <label><input type="checkbox" id="exHints"> Hints allowed</label>
       <div><b>Challenges</b>
-        <div class="exam-chs">${CATEGORIES.map((cat) => `<div class="exam-cat">${cat.icon} ${esc(cat.label)}</div>` + CHALLENGES.filter((ch) => ch.cat === cat.id).map((ch, i) => `<label><input type="checkbox" value="${esc(ch.id)}" checked> ${esc(ch.n + '. ' + ch.title)} <span class="muted">(${ch.quiz ? 'quiz' : esc(ch.lesson || '')})</span></label>`).join('')).join('')}</div>
+        <div class="exam-chs">${CATEGORIES.map((cat) => `<div class="exam-cat">${cat.icon} ${esc(cat.label)}</div>` + CHALLENGES.filter((ch) => ch.cat === cat.id).map((ch, i) => `<label><input type="checkbox" value="${esc(ch.id)}"${ch.cat === 'test' ? ' checked' : ''}> ${esc(ch.n + '. ' + ch.title)} <span class="muted">(${ch.quiz ? 'quiz' : esc(ch.lesson || '')})</span></label>`).join('')).join('')}</div>
       </div>
     </div>
     <div class="actions" style="justify-content:flex-end"><button onclick="closeModal()">Cancel</button><button class="primary" id="exStart">▶ Start the exam</button></div>`);
