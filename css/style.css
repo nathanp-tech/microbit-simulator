@@ -500,3 +500,19 @@ tr.away-row td { background: #fde7e9; }
 .q-code { margin: 6px 0 10px; border-radius: 8px; background: #f2f4f7; border: 1px solid #dde2ea; max-width: 100%; overflow: hidden; }
 .q-code .blocklyMainBackground { fill: #f2f4f7 !important; stroke: none; }
 .q-multi { color: #5b3cc4; font-size: 12.5px; font-weight: 600; }
+/* teacher: choosing an exam, marking */
+.exam-picks { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.exam-pick { display: flex; gap: 10px; align-items: flex-start; border: 2px solid #dde2ea; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.exam-pick.on { border-color: #3454D1; background: #f0f3ff; }
+.exam-pick > div { flex: 1; }
+.pv-part { border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 8px; }
+.review-mission { background: #f6f7fb; border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.review-mission .d-led { width: 26px; height: 26px; vertical-align: middle; }
+.review-mission .d-text { display: inline-flex; gap: 2px; vertical-align: middle; }
+.review-mission .d-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #3a3a3a; color: #fff; font-weight: 800; font-size: 12px; }
+.review-table td { vertical-align: top; }
+.rv-prog { border-radius: 8px; background: #f2f4f7; border: 1px solid #dde2ea; overflow: hidden; max-width: 520px; }
+.rv-prog .blocklyMainBackground { fill: #f2f4f7 !important; stroke: none; }
+.mark-changed { font-weight: 800; color: #b4009e; }
+.q-marks { color: #6b7280; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.review-mission ul.steps { display: block; margin: 0; padding-left: 20px; } .review-mission .test-it { margin: 8px 0 0; }

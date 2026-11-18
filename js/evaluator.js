@@ -125,3 +125,40 @@ function gradeQuiz(ch, answers) {
   const score = Math.round(pts / ch.questions.length * 100);
   return { score, criteria, trials: [{ score, criteria }] };
 }
+
+// ---------- Marks of a test ----------
+// Each challenge and each quiz question has its marks (ch.marks, q.marks). The automatic marks come from the check
+// (score % × marks) or from the answer, rounded to half marks. The teacher can change any mark (res.marks[key]).
+const halfMark = (x) => Math.round(x * 2) / 2;
+const chMarks = (ch) => (ch.quiz ? ch.questions.reduce((a, q) => a + (q.marks || 1), 0) : ch.marks || 4);
+function examItems(challengeIds) {
+  const items = [];
+  for (const id of challengeIds) {
+    const ch = CHALLENGES.find((c) => c.id === id);
+    if (!ch) { items.push({ key: id, chId: id, q: null, label: id, short: id, max: 0 }); continue; }
+    if (ch.quiz) ch.questions.forEach((q, i) => items.push({ key: `${id}#${i}`, chId: id, q: i, label: `Quiz ${i + 1}: ${q.q}`, short: `Q${i + 1}`, max: q.marks || 1 }));
+    else items.push({ key: id, chId: id, q: null, label: ch.title, short: ch.title, max: ch.marks || 4 });
+  }
+  return items;
+}
+// res: { challenges: { id: { score, program } }, marks: { key: number } } (an exam result, or the slots of the blank test)
+function markSheet(challengeIds, res) {
+  const chs = (res && res.challenges) || {}, over = (res && res.marks) || {};
+  const quizCache = {};
+  const items = examItems(challengeIds).map((it) => {
+    const c = chs[it.chId];
+    let auto = 0;
+    if (c && it.q === null) auto = halfMark((Number(c.score) || 0) / 100 * it.max);
+    if (c && it.q !== null) {
+      const ch = CHALLENGES.find((x) => x.id === it.chId);
+      const answers = (c.program && c.program.answers) || [];
+      const g = quizCache[it.chId] || (quizCache[it.chId] = gradeQuiz(ch, answers));
+      auto = halfMark(g.criteria[it.q].points * it.max);
+    }
+    const has = Object.prototype.hasOwnProperty.call(over, it.key) && over[it.key] !== null;
+    return { ...it, submitted: !!c, auto, mark: has ? Number(over[it.key]) : auto, changed: has };
+  });
+  const total = items.reduce((a, i) => a + i.mark, 0), max = items.reduce((a, i) => a + i.max, 0);
+  const pct = max ? Math.round(total / max * 100) : 0;
+  return { items, total, max, pct, grade: swissGrade(pct) };
+}

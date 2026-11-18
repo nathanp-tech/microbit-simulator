@@ -49,6 +49,10 @@ The welcome page has two choices only:
 | 3 | Light meter (A → light level) | Compass (forever: N / E / S / W from the heading) | light 30 and 200 / headings 10°, 90°, 180°, 270°, 350° |
 | 4 | Quiz, 6 questions | Quiz, 6 questions | sensors (tick all), inputs and outputs, a variable, programs in blocks to debug (wrong button, shake counter reset each time, compass E / W swapped, light level → 0) |
 
+**Marks:** each part has its marks, shown to the students (challenge: `marks` in `js/challenges.js`, quiz question: `marks`); both exams are out of 25. The automatic mark is the check score × the marks (or the answer of the question), rounded to half marks; the grade is the Swiss scale from the total. Results → **✏️ Mark question by question**: one question at a time, every student's program (in blocks) or answer, the automatic mark, and a field to change it (↺ auto goes back). The live view shows each student's marks and grade for the latest exam of their class (updated when you change a mark); click it for the results.
+
+**Start an exam** lets you choose an exam of `EXAMS` (`js/challenges.js`: Blank exam, Exam 1…) and **👁 Preview** it: every part, its marks, the mission, the quiz questions with the right answers.
+
 Quiz questions can show a program drawn with the real MakeCode blocks (`code:` in `js/challenges.js`) and can have several right answers (`multi: true`: +1 per right tick, −1 per wrong tick, never below 0).
 
 The former challenges of the units (mood, dice, step counter, night light, reaction game…) are no longer in the app; their reference solutions are still in `tests/solutions_src.js`.

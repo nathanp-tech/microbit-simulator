@@ -896,6 +896,28 @@ class Api:
             if cmds:
                 self.r(*cmds)
             return 200, {'ok': True}
+        if path == '/api/exam/mark':
+            # The teacher changes the mark of one question for one student (marks: a number, or null = back to the automatic mark).
+            eid, sid, key = str(data.get('examId', '')), str(data.get('studentId', '')), str(data.get('key', ''))
+            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not re.fullmatch(r'[\w-]{1,40}(#\d{1,2})?', key):
+                return 400, {'error': 'bad request'}
+            raw = self.r(['HGET', P + 'exams', eid], ['HGET', P + 'examres:' + eid, sid])
+            exam, res = jload(raw[0]), jload(raw[1], {}) or {}
+            if not exam:
+                return 404, {'error': 'no such exam'}
+            if not res:
+                res = {'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': exam.get('className'), 'challenges': {}}
+            marks = res.setdefault('marks', {})
+            if data.get('marks') is None:
+                marks.pop(key, None)
+            else:
+                v = float(data['marks'])  # ValueError → 400
+                if not 0 <= v <= 100:
+                    return 400, {'error': 'a mark is between 0 and the marks of the question'}
+                marks[key] = v
+            res['markedAt'] = time.time()
+            self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
+            return 200, {'ok': True, 'marks': marks}
         if path == '/api/exam':
             action = data.get('action')
             if action == 'start':

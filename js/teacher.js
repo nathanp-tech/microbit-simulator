@@ -67,7 +67,7 @@ function rowHtml(s, i, stats, source) {
     <td>${free ? `<button class="linklike" data-dot="${source}:${i}" data-ch="free">free programming</button>` : esc(chShort(s.current))}</td>
     <td>${free ? fmtTime(s.freeTime) : fmtTime(cur && cur.timeSpent)}</td>
     <td>${nb(free ? s.free && s.free.runs : cur && cur.runs) || 0}</td>
-    <td>${!free && cur && nb(cur.bestScore) !== null ? nb(cur.bestScore) + ' %' : '—'}</td>
+    <td>${source === 'live' ? gradeCell(s) : !free && cur && nb(cur.bestScore) !== null ? nb(cur.bestScore) + ' %' : '—'}</td>
     <td class="st ${status.cls}">${status.text}</td>
     <td style="white-space:nowrap">${canValidate ? `<button class="mini" data-validate="${i}" title="Mark this challenge as passed and unlock the next one">Unlock next</button> ` : ''}${source === 'live' ? `<button class="mini primary" data-watch="${i}" title="See their blocks live and run their program">👁 View</button> <button class="mini" data-reset="${i}" title="Clear this student: everything is deleted, they are logged out and start again">↺</button> ` : ''}<button class="mini" data-details="${i}" data-src="${source}">Details</button></td>
   </tr>`;
@@ -113,12 +113,37 @@ async function refreshLive() {
     T.classctl = data.classctl || {};
     renderHelpQueue();
     renderLive();
+    refreshGrades();
     $('liveStatus').textContent = '● Live · updated ' + new Date().toLocaleTimeString();
     $('liveStatus').classList.add('on');
   } catch (e) {
     $('liveStatus').textContent = '⚠️ Server unreachable';
     $('liveStatus').classList.remove('on');
   }
+}
+
+// ---------- Test grades: the latest test of each class, with the marks changed by the teacher ----------
+async function refreshGrades(force) {
+  if (!force && Date.now() - (T.gradesAt || 0) < 20000) return;
+  T.gradesAt = Date.now();
+  try {
+    const d = await (await tfetch('api/exams')).json();
+    const latest = {};
+    for (const e of d.exams || []) if (!latest[e.className] || e.startedAt > latest[e.className].startedAt) latest[e.className] = e;
+    const grades = {};
+    await Promise.all(Object.values(latest).map(async (e) => {
+      const r = await (await tfetch('api/exam/results?examId=' + encodeURIComponent(e.id))).json();
+      for (const res of r.results || []) grades[res.studentId] = { ...markSheet(e.challenges, res), title: e.title, examId: e.id, className: e.className };
+    }));
+    T.grades = grades;
+    renderLive();
+  } catch (e) { /* next time */ }
+}
+function gradeCell(s) {
+  const g = (T.grades || {})[s.studentId];
+  if (!g) return '<span class="muted">—</span>';
+  const t = Number.isInteger(g.total) ? g.total : g.total.toFixed(1);
+  return `<button class="linklike" data-grade="${esc(g.examId)}" title="${esc(g.title)}: ${t} / ${g.max} marks · click for the results">${t}/${g.max} · <b>${g.grade.toFixed(1)}</b></button>`;
 }
 
 // ---------- Classes (chosen by the teacher in Manage) ----------
@@ -584,6 +609,10 @@ function watchSlots(work) {
     const has = c.quiz ? e.answers : e.program;
     return [c.id, `${mark[e.status] || ''} ${c.n}. ${c.title}${c.quiz ? ' (quiz)' : ''}${cur}${has ? '' : ' (nothing yet)'}`];
   });
+  // a program of a challenge that is no longer in the app (an older test): still shown
+  for (const [id, e] of Object.entries(work.challenges || {})) {
+    if (!CHALLENGES.some((c) => c.id === id) && e && (e.program || e.answers)) slots.unshift([id, `📝 ${id}${e.answers ? ' (quiz)' : ''}`]);
+  }
   slots.push(['free', `🛠️ Free programming${work.free && work.free.program ? '' : ' (no code yet)'}`]);
   // exams, most recent first: the slot is "<exam id>-<challenge id>", like their history
   const exams = Object.entries(work.exams || {}).sort((a, b) => (b[1].startedAt || 0) - (a[1].startedAt || 0));
@@ -739,6 +768,8 @@ function init() {
     if (v) validateLive(Number(v.dataset.validate));
     const w = e.target.closest('[data-watch]');
     if (w) watchStudent(T.live[Number(w.dataset.watch)].studentId);
+    const gr = e.target.closest('[data-grade]');
+    if (gr) examResults(gr.dataset.grade);
     const d = e.target.closest('[data-details]');
     if (d) {
       const snap = T.live[Number(d.dataset.details)];

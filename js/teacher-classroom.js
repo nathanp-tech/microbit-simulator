@@ -106,30 +106,62 @@ function messageDialog(c) {
 }
 
 // ---------- 📝 Exams ----------
-function examDialog(c) {
-  const today = new Date().toLocaleDateString();
+function examDialog(c, chosen = EXAMS[EXAMS.length - 1].id) {
+  const tcode = (T.testCodes || {})[c] || '';
+  const card = (x) => {
+    const items = examItems(x.challenges), max = items.reduce((a, i) => a + i.max, 0);
+    return `<label class="exam-pick${x.id === chosen ? ' on' : ''}"><input type="radio" name="exPick" value="${esc(x.id)}"${x.id === chosen ? ' checked' : ''}>
+      <div><b>${esc(x.title)}</b> <span class="muted">· ${x.minutes} min · ${max} marks</span>
+      <div class="muted">${x.challenges.map((id) => { const ch = CHALLENGES.find((k) => k.id === id); return ch ? `${esc(ch.title)} (${chMarks(ch)})` : esc(id); }).join(' · ')}</div>
+      <div class="muted" style="font-size:12px">${esc(x.note || '')}</div></div>
+      <button class="mini" data-preview="${esc(x.id)}" title="See every question and the right answers">👁 Preview</button></label>`;
+  };
   openModal(`<h2>📝 Start an exam for ${esc(c)}</h2>
-    <p class="muted">The students of ${esc(c)} open it with the <b>test password ${esc((T.testCodes || {})[c] || '')}</b> (the 📝 Test card on the welcome page, or the window that appears on their screen). Each challenge starts from an empty program; their best submitted program counts and the score becomes a Swiss grade.</p>
+    <p class="muted">Students open it with the <b>📝 Test</b> card and the <b>test password ${esc(tcode)}</b>. Each part starts from an empty program; it is marked automatically and you can change the marks after (Results → ✏️ Mark question by question).</p>
+    <div class="exam-picks">${EXAMS.map(card).join('')}</div>
     <div class="exam-form">
-      <label>Title <input id="exTitle" value="Test ${esc(c)} · ${esc(today)}"></label>
       <label>Duration <input id="exMin" type="number" min="1" max="240" value="40" style="width:70px"> minutes</label>
       <label><input type="checkbox" id="exHints"> Hints allowed</label>
-      <div><b>Challenges</b>
-        <div class="exam-chs">${CATEGORIES.map((cat) => `<div class="exam-cat">${cat.icon} ${esc(cat.label)}</div>` + CHALLENGES.filter((ch) => ch.cat === cat.id).map((ch, i) => `<label><input type="checkbox" value="${esc(ch.id)}"${ch.cat === 'test' ? ' checked' : ''}> ${esc(ch.n + '. ' + ch.title)} <span class="muted">(${ch.quiz ? 'quiz' : esc(ch.lesson || '')})</span></label>`).join('')).join('')}</div>
-      </div>
     </div>
     <div class="actions" style="justify-content:flex-end"><button onclick="closeModal()">Cancel</button><button class="primary" id="exStart">▶ Start the exam</button></div>`);
+  const picked = () => EXAMS.find((x) => x.id === (document.querySelector('input[name=exPick]:checked') || {}).value) || EXAMS[0];
+  document.querySelectorAll('input[name=exPick]').forEach((r) => { r.onchange = () => { document.querySelectorAll('.exam-pick').forEach((l) => l.classList.toggle('on', l.contains(r) && r.checked)); $('exMin').value = picked().minutes; }; });
+  document.querySelectorAll('[data-preview]').forEach((b) => { b.onclick = (ev) => { ev.preventDefault(); examPreview(b.dataset.preview, () => examDialog(c, b.dataset.preview)); }; });
   $('exStart').onclick = async () => {
-    const challenges = [...document.querySelectorAll('.exam-chs input:checked')].map((x) => x.value);
-    if (!challenges.length) { alert('Choose at least one challenge.'); return; }
+    const x = picked();
     try {
-      await tpost('api/exam', { action: 'start', className: c, title: $('exTitle').value, minutes: Number($('exMin').value) || 30, hints: $('exHints').checked, challenges });
-      const tcode = (T.testCodes || {})[c];
-      if (tcode) openModal(`<div class="big-share"><h2>📝 ${esc(c)} · The test is open</h2><p>Click <b>📝 Test</b>, then type the test password:</p><div style="font-size:72px;font-weight:800;letter-spacing:10px;margin:10px 0">${esc(tcode)}</div><div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div></div>`);
+      await tpost('api/exam', { action: 'start', className: c, title: `${x.title} · ${new Date().toLocaleDateString()}`, minutes: Number($('exMin').value) || x.minutes, hints: $('exHints').checked, challenges: x.challenges });
+      if (tcode) openModal(`<div class="big-share"><h2>📝 ${esc(c)} · ${esc(x.title)} is open</h2><p>Click <b>📝 Test</b>, then type the test password:</p><div style="font-size:72px;font-weight:800;letter-spacing:10px;margin:10px 0">${esc(tcode)}</div><div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div></div>`);
       else closeModal();
       await refreshLive();
     } catch (e) { alert(e.message); }
   };
+}
+// What the students will see: every part, its marks, the mission, the quiz questions with the right answers
+const previewWs = [];
+function examPreview(id, back) {
+  const x = EXAMS.find((k) => k.id === id);
+  if (!x) return;
+  while (previewWs.length) { try { previewWs.pop().dispose(); } catch (e) { /* gone */ } }
+  const items = examItems(x.challenges), max = items.reduce((a, i) => a + i.max, 0);
+  const part = (cid, n) => {
+    const ch = CHALLENGES.find((k) => k.id === cid);
+    if (!ch) return '';
+    if (!ch.quiz) return `<div class="pv-part"><h3>${n}. ${esc(ch.title)} <span class="muted">· ${chMarks(ch)} marks</span></h3><div class="review-mission">${richDesc(ch.description)}</div>
+      <p class="muted">Checked automatically: ${(ch.tests || []).map((t) => `${esc(t.label)} (${t.points} %)`).join(' · ')}</p></div>`;
+    return `<div class="pv-part"><h3>${n}. ${esc(ch.title)} <span class="muted">· ${chMarks(ch)} marks</span></h3>${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="muted">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-pv="${esc(cid)}:${i}"></div>` : ''}${q.options.map((o, k) => `<div class="wq-opt${quizRight(q, k) ? ' right' : ''}">${quizRight(q, k) ? '✔' : '·'} ${esc(o)}</div>`).join('')}</div>`).join('')}</div>`;
+  };
+  openModal(`<div class="actions"><button id="pvBack">← Back</button></div>
+    <h2>👁 ${esc(x.title)} <span class="muted">· ${x.minutes} min · ${max} marks</span></h2><p class="muted">${esc(x.note || '')}</p>
+    ${x.challenges.map((cid, i) => part(cid, i + 1)).join('')}`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '900px';
+  document.querySelectorAll('[data-pv]').forEach((div) => {
+    const [cid, i] = div.dataset.pv.split(':');
+    const q = CHALLENGES.find((k) => k.id === cid).questions[Number(i)];
+    const w = renderProgramInto(div, q.code);
+    if (w) previewWs.push(w);
+  });
+  $('pvBack').onclick = back;
 }
 async function examsList() {
   const d = await (await tfetch('api/exams')).json();
@@ -152,60 +184,131 @@ async function examResults(id) {
   X.exam = d.exam; X.results = d.results; X.verified = {}; X.now = d.now;
   renderExamResults();
 }
+// a result with the replayed scores (Verify) in place of the scores sent by the browsers
+function verifiedResult(r) {
+  const chs = {};
+  for (const [cid, c] of Object.entries(r.challenges || {})) {
+    const v = X.verified[(r.studentId || '') + ':' + cid];
+    chs[cid] = v !== undefined ? { ...c, score: v } : c;
+  }
+  return { ...r, challenges: chs };
+}
 function examRows() {
   const e = X.exam, names = (teacherRoster()[e.className] || []).slice();
   const rows = names.map((n) => X.results.find((r) => nkey(r.name) === nkey(n) && nkey(r.className) === nkey(e.className)) || { name: n, className: e.className, challenges: {}, missing: true });
   for (const r of X.results) if (!rows.includes(r)) rows.push(r);
-  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((r) => {
-    const scores = e.challenges.map((cid) => {
-      const c = (r.challenges || {})[cid];
-      const v = X.verified[(r.studentId || '') + ':' + cid];
-      return c ? (v !== undefined ? v : c.score) : 0;
-    });
-    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / e.challenges.length);
-    return { r, scores, avg, grade: swissGrade(avg) };
-  });
+  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((r) => ({ r, sheet: markSheet(e.challenges, verifiedResult(r)) }));
+}
+const fmtMark = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+// the work of one student in one test, to open it in the student view (program and board, or the quiz answers)
+function examWork(r, cid) {
+  const e = X.exam, c = (r.challenges || {})[cid] || {};
+  const ids = [...new Set([...CHALLENGES.map((ch) => ch.id), cid])];
+  const challenges = Object.fromEntries(ids.map((id) => [id, id === cid ? (c.program && c.program.quiz ? { status: 'validated', answers: c.program.answers } : { status: 'validated', program: c.program }) : { status: 'locked' }]));
+  return { name: `${r.name} · ${e.title}`, className: e.className, mode: 'guided', current: cid, challenges, free: {}, events: [] };
 }
 function renderExamResults() {
   const e = X.exam, rows = examRows();
+  const items = examItems(e.challenges), max = items.reduce((a, i) => a + i.max, 0);
   const running = !e.stoppedAt && X.now < e.endsAt;
   openModal(`<h2>📝 ${esc(e.title)} · ${esc(e.className)}</h2>
-    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min${e.hints ? ' · hints allowed' : ''} · ${running ? '⏱ still running' : 'finished'} · score = best check per challenge, grade = Swiss scale from the average.</p>
-    <div class="actions"><button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying the programs</button>
+    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min · ${running ? '⏱ still running' : 'finished'} · marks given automatically (✎ = changed by you) · grade = Swiss scale from the total.</p>
+    <div class="actions"><button class="primary" id="exReview" title="Go through the questions one by one and change the marks">✏️ Mark question by question</button>
+      <button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying</button>
       <button id="exCsv">📊 CSV</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
-    <table class="cls exam-table"><thead><tr><th>Student</th>${e.challenges.map((c) => `<th title="${esc(chName(c))}">${esc(chName(c).replace(/^\d+\.\s*/, ''))}</th>`).join('')}<th>Average</th><th>Grade</th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
-    ${rows.map(({ r, avg, grade }) => `<tr${r.missing ? ' class="absent"' : ''}><td><b>${esc(r.name)}</b>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
-      ${e.challenges.map((cid) => {
-    const c = (r.challenges || {})[cid];
-    if (!c) return '<td class="muted">—</td>';
-    const v = X.verified[r.studentId + ':' + cid];
-    const flag = v === undefined ? '' : v === c.score ? ' <span class="ok-mark" title="Verified">✓</span>' : ` <span class="warn-mark" title="The replay gives ${v} % (the student's browser said ${c.score} %)">⚠ ${v} %</span>`;
-    return `<td><button class="linklike" data-exview="${esc(r.studentId)}:${esc(cid)}" title="See the program">${c.score} %</button>${flag} <span class="muted">(${c.checks}×)</span></td>`;
-  }).join('')}
-      <td><b>${avg} %</b></td><td><b class="grade">${r.missing ? '—' : grade.toFixed(1)}</b></td>
+    <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade</th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
+    ${rows.map(({ r, sheet }) => `<tr${r.missing ? ' class="absent"' : ''}><td><b>${esc(r.name)}</b>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
+      ${sheet.items.map((it) => (!it.submitted && !it.changed ? '<td class="muted">—</td>'
+    : `<td><button class="linklike${it.changed ? ' mark-changed' : ''}" data-exview="${esc(r.studentId)}:${esc(it.chId)}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : 'Automatic mark'} · click to see the work">${fmtMark(it.mark)}${it.changed ? ' ✎' : ''}</button></td>`)).join('')}
+      <td><b>${r.missing ? '—' : fmtMark(sheet.total)}</b></td><td><b class="grade">${r.missing ? '—' : sheet.grade.toFixed(1)}</b></td>
       <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
-      <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table>`);
-  $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
+      <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table></div>`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '1400px';
   $('exRefresh').onclick = () => examResults(e.id);
+  $('exReview').onclick = () => renderReview(0);
+  document.querySelectorAll('[data-review]').forEach((b) => { b.onclick = () => renderReview(Number(b.dataset.review)); });
   $('exCsv').onclick = () => {
-    const head = ['Class', 'Student', ...e.challenges.map(chName), 'Average %', 'Grade', 'Handed in', 'Left the page (times)', 'Away (seconds)'];
-    const lines = [head].concat(rows.map(({ r, scores, avg, grade }) => [e.className, r.name, ...scores, avg, r.missing ? '' : grade,
+    const head = ['Class', 'Student', ...items.map((it) => `${it.short} (/${it.max})`), `Total (/${max})`, 'Grade', 'Handed in', 'Left the page (times)', 'Away (seconds)'];
+    const lines = [head].concat(rows.map(({ r, sheet }) => [e.className, r.name, ...sheet.items.map((it) => it.mark), sheet.total, r.missing ? '' : sheet.grade,
       r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString() : '', r.away ? r.away.n : '', r.away ? Math.round(r.away.ms / 1000) : '']));
     const csv = '﻿' + lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `exam_${slugName(e.className)}_${slugName(e.title)}.csv`;
+    a.download = `test_${slugName(e.className)}_${slugName(e.title)}.csv`;
     a.click();
   };
   $('exVerify').onclick = verifyExam;
   document.querySelectorAll('[data-exview]').forEach((b) => {
     b.onclick = () => {
       const [sid, cid] = b.dataset.exview.split(':');
-      const r = X.results.find((x) => x.studentId === sid), c = r.challenges[cid];
-      const work = { name: `${r.name} · ${e.title}`, className: e.className, mode: 'guided', current: cid, challenges: Object.fromEntries(CHALLENGES.map((ch) => [ch.id, ch.id === cid ? (c.program && c.program.quiz ? { status: 'validated', answers: c.program.answers } : { status: 'validated', program: c.program }) : { status: 'locked' }])), free: {}, events: [] };
-      watchStudent('exam-' + sid, { slot: cid, work });
+      const r = X.results.find((x) => x.studentId === sid);
+      if (r) watchStudent('exam-' + sid, { slot: cid, work: examWork(r, cid) });
     };
   });
+}
+
+// ---------- ✏️ Marking: one question at a time, every student, the automatic mark that the teacher can change ----------
+const reviewWs = [];
+function renderReview(k) {
+  const e = X.exam, items = examItems(e.challenges), it = items[k];
+  if (!it) return renderExamResults();
+  while (reviewWs.length) { try { reviewWs.pop().dispose(); } catch (err) { /* gone */ } }
+  const ch = CHALLENGES.find((c) => c.id === it.chId), q = ch && ch.quiz ? ch.questions[it.q] : null;
+  const rows = examRows().filter(({ r }) => !r.missing);
+  const head = q
+    ? `<p><b>${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? '<div class="q-code" data-q="0"></div>' : ''}<p class="muted">Right answer: ${q.options.filter((o, i) => quizRight(q, i)).map(esc).join(' · ')}</p>`
+    : `<div class="review-mission">${ch ? richDesc(ch.description) : esc(it.chId)}</div>`;
+  const answer = (r, sheetItem) => {
+    const c = (r.challenges || {})[it.chId];
+    if (!c) return '<span class="muted">nothing submitted</span>';
+    if (q) {
+      const given = ((c.program && c.program.answers) || [])[it.q];
+      const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
+      return picked || '<span class="muted">no answer</span>';
+    }
+    return `<div class="rv-prog" data-sid="${esc(r.studentId)}"></div><div class="muted">Automatic check: ${c.score} %${X.verified[r.studentId + ':' + it.chId] !== undefined ? ' (replayed)' : ''} · <button class="linklike" data-exview="${esc(r.studentId)}:${esc(it.chId)}">▶ open with the micro:bit</button></div>`;
+  };
+  openModal(`<div class="actions"><button id="rvBack">← Results</button><span style="flex:1"></span>
+      <button id="rvPrev"${k ? '' : ' disabled'}>← Previous</button><b>${k + 1} / ${items.length}</b><button id="rvNext"${k < items.length - 1 ? '' : ' disabled'}>Next →</button></div>
+    <h2>✏️ ${esc(it.label)} · <span class="muted">${fmtMark(it.max)} mark${it.max > 1 ? 's' : ''}</span></h2>${head}
+    <table class="cls review-table"><thead><tr><th>Student</th><th>Answer</th><th>Automatic</th><th>Mark</th></tr></thead><tbody>
+    ${rows.map(({ r, sheet }) => { const si = sheet.items[k]; return `<tr><td><b>${esc(r.name)}</b></td><td>${answer(r, si)}</td><td>${fmtMark(si.auto)} / ${fmtMark(it.max)}</td>
+      <td style="white-space:nowrap"><input type="number" class="rv-mark" data-sid="${esc(r.studentId)}" min="0" max="${it.max}" step="0.5" value="${si.mark}" style="width:70px"> / ${fmtMark(it.max)}
+      ${si.changed ? `<button class="mini" data-auto="${esc(r.studentId)}" title="Back to the automatic mark">↺ auto</button>` : ''}<span class="rv-ok muted"></span></td></tr>`; }).join('') || '<tr><td colspan="4" class="muted">No result yet.</td></tr>'}</tbody></table>`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '1100px';
+  if (q && q.code) reviewWs.push(renderProgramInto($('modal').querySelector('.q-code'), q.code));
+  if (!q) document.querySelectorAll('.rv-prog').forEach((div) => {
+    const r = X.results.find((x) => x.studentId === div.dataset.sid), c = r && (r.challenges || {})[it.chId];
+    const w = c && c.program ? renderProgramInto(div, c.program, 0.6) : null;
+    if (w) reviewWs.push(w);
+  });
+  $('rvBack').onclick = renderExamResults;
+  $('rvPrev').onclick = () => renderReview(k - 1);
+  $('rvNext').onclick = () => renderReview(k + 1);
+  document.querySelectorAll('[data-exview]').forEach((b) => {
+    b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); const r = X.results.find((x) => x.studentId === sid); if (r) watchStudent('exam-' + sid, { slot: cid, work: examWork(r, cid) }); };
+  });
+  const save = async (sid, marks, el) => {
+    const r = X.results.find((x) => x.studentId === sid);
+    try {
+      const d = await tpost('api/exam/mark', { examId: e.id, studentId: sid, key: it.key, marks, name: r && r.name });
+      if (r) r.marks = d.marks;
+      if (el) { el.textContent = '✓ saved'; setTimeout(() => { el.textContent = ''; }, 1500); }
+      refreshGrades(true);
+    } catch (err) { alert('Not saved: ' + err.message); }
+  };
+  document.querySelectorAll('.rv-mark').forEach((inp) => {
+    inp.onchange = () => {
+      let v = Number(inp.value);
+      if (!isFinite(v)) return;
+      v = Math.max(0, Math.min(it.max, halfMark(v)));
+      inp.value = v;
+      save(inp.dataset.sid, v, inp.parentElement.querySelector('.rv-ok')).then(() => {
+        if (!inp.parentElement.querySelector('[data-auto]')) renderReview(k);
+      });
+    };
+  });
+  document.querySelectorAll('[data-auto]').forEach((b) => { b.onclick = () => save(b.dataset.auto, null).then(() => renderReview(k)); });
 }
 async function verifyExam() {
   const e = X.exam, todo = [];

@@ -897,8 +897,8 @@ function showQuiz(slot) {
     const mark = marks && picked ? (marks[i] ? ' right' : ' wrong') : '';
     return `<label class="${picked ? 'picked' : ''}${mark}"><input type="${q.multi ? 'checkbox' : 'radio'}" name="q${i}" value="${k}"${picked ? ' checked' : ''}${sent ? ' disabled' : ''}> ${esc(o)}</label>`;
   };
-  $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)}</h2><p class="muted">${ch.description}</p>
-    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
+  $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)} <span class="q-marks">· ${chMarks(ch)} marks</span></h2><p class="muted">${ch.description}</p>
+    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="q-marks">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
     <div style="text-align:right;margin-top:10px">${sent ? '<b>✅ Your answers are sent.</b>' : `<button class="mc-btn green" id="quizCheck">${App.exam ? '📨 Send my answers' : '✅ Check my answers'}</button>`}</div></div>`;
   renderQuizCode($('quizView'), ch.questions);
   $('quizView').querySelectorAll('input[type=radio], input[type=checkbox]').forEach((r) => {

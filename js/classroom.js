@@ -267,7 +267,7 @@ function renderExam() {
   }).join('');
   $('stepper').innerHTML = ''; // the steps are in the bar under the header
   $('challengeTitle').textContent = `${e.practice ? '🧪' : '📝'} ${chTitle(ch.id)}`;
-  $('challengeMeta').textContent = `${e.practice ? '🧪 Blank test' : '📝 Test'} · ${k + 1} of ${e.challenges.length}`;
+  $('challengeMeta').textContent = `${e.practice ? '🧪 Blank test' : '📝 Test'} · ${k + 1} of ${e.challenges.length} · ${chMarks(ch)} marks`;
   $('btnAllCh').hidden = true;
   $('btnHint').textContent = '💡 Need a hint?';
   $('btnSolution').hidden = true;
@@ -366,10 +366,15 @@ function showExamEnd(handedIn) {
   closeModal();
   if (App.exam.practice) {
     // the blank test: the student sees their result (score of each part and the grade)
-    const sc = App.exam.challenges.map((id) => examSlot(id).best || 0);
-    const avg = Math.round(sc.reduce((a, b) => a + b, 0) / sc.length);
-    const prow = App.exam.challenges.map((id, i) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? sc[i] + ' %' : '— (nothing submitted)'}</b></td></tr>`).join('');
-    $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Average</b></td><td><b>${avg} % · grade ${swissGrade(avg).toFixed(1)}</b></td></tr></table>
+    const res = { challenges: Object.fromEntries(App.exam.challenges.filter((id) => examSlot(id).checks).map((id) => [id, { score: examSlot(id).best || 0, program: examSlot(id).bestProgram }])) };
+    const sheet = markSheet(App.exam.challenges, res);
+    const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+    const prow = App.exam.challenges.map((id) => {
+      const its = sheet.items.filter((it) => it.chId === id);
+      const got = its.reduce((a, it) => a + it.mark, 0), max = its.reduce((a, it) => a + it.max, 0);
+      return `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? `${fm(got)} / ${fm(max)}` : `— / ${fm(max)} (nothing submitted)`}</b></td></tr>`;
+    }).join('');
+    $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Total</b></td><td><b>${fm(sheet.total)} / ${fm(sheet.max)} marks · grade ${sheet.grade.toFixed(1)}</b></td></tr></table>
       <p class="muted">This was a practice test. In the real test, your teacher gives you the password.</p><button class="primary" id="blankHome">🏠 Back to the home page</button>`;
     $('examOverlay').hidden = false;
     $('blankHome').onclick = goHome;
