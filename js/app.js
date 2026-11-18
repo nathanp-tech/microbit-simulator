@@ -704,20 +704,22 @@ async function startBlankTest() {
   } finally { startingBlank = false; }
 }
 // 📝 Test: the password first (no session yet), then the student's work, then the test opens.
-function startTest() {
+async function startTest() {
   if (!$('wName').value.trim()) { $('wError').textContent = 'Choose your class and your name first.'; return; }
   $('wError').textContent = '';
-  askTestCode(null, async (code, exam) => {
-    CR.askedExam = exam.id; // no second password window when the class controls arrive
-    await chooseModeNow('guided');
-    if (!Progress.data) return;
-    try {
-      const r = await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testCode: code, className: Progress.data.className, studentId: Progress.data.studentId, name: Progress.data.name }) });
-      if (r.status === 403 || r.status === 404) { const d = await r.json().catch(() => ({})); if (d.finished) examEntry(exam).done = Date.now(); else { toast('📝 ' + (d.error || 'The test cannot be opened.'), 5000); return; } }
-    } catch (e) { /* network trouble: the results are sent again later */ }
-    joinExam(exam);
-  });
+  await chooseModeNow('guided');
+  if (!Progress.data || !$('welcome').hidden) return;
+  // already in the running test (page reloaded, another computer)? back in at once; else the password
+  let d = {}, r = null;
+  try {
+    r = await sfetch('api/exam/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume: true, className: Progress.data.className, studentId: Progress.data.studentId, name: Progress.data.name }) });
+    d = await r.json().catch(() => ({}));
+  } catch (e) { /* no network: the password window says so */ }
+  if (r && r.ok && d.exam) { CR.askedExam = d.exam.id; joinExam(d.exam); return; }
+  if (d.finished && d.exam) { examEntry(d.exam).done = Date.now(); joinExam(d.exam); return; }
+  if (r && r.status === 404) { const msg = d.error || 'There is no test open for your class right now.'; goHome(); $('wError').textContent = msg; return; }
+  askTestCode(null);
 }
 async function chooseModeNow(mode) {
   const name = $('wName').value.trim(), cls = $('wClass').value.trim();

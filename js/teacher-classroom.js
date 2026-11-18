@@ -57,7 +57,7 @@ function classCtlHtml(c) {
   const ex = ctl.exam;
   let exam;
   if (ex && ex.active && T.serverNow < ex.endsAt) {
-    exam = `<span class="ctl-badge exam">📝 ${esc(ex.title)} · ⏱ ${mmss(ex.endsAt - T.serverNow)}</span>
+    exam = `<span class="ctl-badge exam">📝 ${esc(ex.title)} · ⏱ ${mmss(ex.endsAt - T.serverNow)}</span>${examCounts(c, ex)}
       <button class="mini" data-ctl="results" data-exam="${esc(ex.id)}">Results</button><button class="mini danger" data-ctl="stop" data-exam="${esc(ex.id)}">⏹ Stop</button>`;
   } else if (ex) {
     exam = `<span class="ctl-badge exam">📝 ${esc(ex.title)} · finished</span>
@@ -73,6 +73,15 @@ function classCtlHtml(c) {
     <button class="mini${ctl.paused ? ' on' : ''}" data-ctl="pause" data-class="${esc(c)}" title="Freeze the screens to get attention">${ctl.paused ? '▶ Resume' : '⏸ Pause screens'}</button>
     <button class="mini${ctl.closed ? ' on' : ''}" data-ctl="close" data-class="${esc(c)}" title="Allow or block the access of this class">${ctl.closed ? '🔓 Open access' : '🔒 Close access'}</button>
     ${exam}</span>`;
+}
+// in the class header during a test: how many students are in it, have submitted, are away from the page
+function examCounts(c, ex) {
+  const snaps = (T.live || []).filter((s) => s.className === c && s.live && s.live.exam && s.live.exam.id === ex.id);
+  if (!snaps.length) return '';
+  const online = (s) => T.serverNow - (s.receivedAt || 0) <= ONLINE_SECONDS && s.live.status !== 'left';
+  const done = snaps.filter((s) => s.live.exam.done).length;
+  const away = snaps.filter((s) => !s.live.exam.done && (s.live.exam.away || !online(s))).length;
+  return ` <span class="ctl-badge" title="Students in this test · submitted · not on the test page">👥 ${snaps.length} in · ✅ ${done} submitted${away ? ` · <b style="color:#c62828">🚨 ${away} away</b>` : ''}</span>`;
 }
 async function classCommand(btn) {
   const c = btn.dataset.class, act = btn.dataset.ctl, ctl = T.classctl[c] || {};
@@ -521,6 +530,7 @@ async function verifyExam() {
   for (const [r, cid] of todo) {
     $('exMsg').textContent = `Replaying ${++done} / ${todo.length}…`;
     const ch = CHALLENGES.find((c) => c.id === cid), c = r.challenges[cid];
+    if (!ch) { X.verified[r.studentId + ':' + cid] = c.score; continue; }  // a challenge that no longer exists: keep its score
     // the best program and the former bests: the replay keeps the highest score it can confirm
     let best = 0;
     for (const p of [c, ...(c.alts || [])].filter((x) => x && x.program)) {

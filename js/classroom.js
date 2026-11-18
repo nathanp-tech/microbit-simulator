@@ -192,8 +192,12 @@ function handleExam(e) {
 function askTestCode(e, onOk) {
   openModal(`<h2>📝 Test</h2><p>${e ? `<b>${esc(e.title)}</b> · ${e.minutes} min. ` : ''}Type the <b>test password</b> your teacher gives you.</p>
     <div class="wcode"><input id="tCode" autocomplete="off" inputmode="numeric" placeholder="password"><button class="primary" id="tCodeGo">Start the test</button></div>
-    <p id="tCodeErr" class="werr"></p><div style="text-align:right"><button onclick="closeModal()">Cancel</button></div>`);
+    <p id="tCodeErr" class="werr"></p><div style="text-align:right"><button id="tCancel">Cancel</button></div>`);
   const input = $('tCode'), go = $('tCodeGo');
+  // cancel: back to the home page if the test was not open yet (nothing else to do in the app)
+  const cancel = () => { closeModal(); $('modalClose').onclick = closeModal; if (!App.exam && Progress.data && $('welcome').hidden) goHome(); };
+  $('tCancel').onclick = cancel;
+  $('modalClose').onclick = cancel;
   input.focus();
   const submit = async () => {
     const code = input.value.trim();
@@ -209,6 +213,7 @@ function askTestCode(e, onOk) {
       if (d.finished && Progress.data) { closeModal(); examEntry(d.exam || e).done = Date.now(); joinExam(d.exam || e); return; }
       if (!r.ok) { $('tCodeErr').textContent = d.error || 'The class server does not answer. Try again.'; return; }
       closeModal();
+      $('modalClose').onclick = closeModal;
       if (onOk) await onOk(code, d.exam);
       else joinExam(d.exam);
     } catch (err) { $('tCodeErr').textContent = 'The class server does not answer. Try again.'; } finally { go.disabled = false; }
@@ -309,8 +314,9 @@ function onExamGrade(res) {
     return;
   }
   if (ch.quiz) showQuiz(slot);
-  openModal(`<h2>${sent}</h2><p>🎉 Everything is submitted. You can still click a step in the bar at the top, improve a program, test it and submit it again.</p>
-    <div style="text-align:right"><button class="primary" onclick="closeModal()">OK</button></div>`);
+  openModal(`<h2>${sent}</h2><p>🎉 Everything is submitted. Finished? Hand in your test. Or keep working: click a step in the bar at the top, improve a program, test it and submit it again.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button onclick="closeModal()">Keep working</button><button class="primary" id="allDoneFinish">✅ Submit my test</button></div>`);
+  $('allDoneFinish').onclick = () => { closeModal(); confirmFinishTest(); };
 }
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
 function queueExamResult(r) {
@@ -344,6 +350,16 @@ function updateExamBanner() {
   b.classList.toggle('soon', left < 120 && !CR.examOver);
   b.innerHTML = CR.examOver ? `📝 ${esc(App.exam.title)} · ⏱ finished` : `📝 <b>${esc(App.exam.title)}</b> · ⏱ <b>${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}</b> left`;
   if (!CR.examOver && left <= 0) finishExam();
+  // warnings a few minutes before the end (once each)
+  if (!CR.examOver && left > 0) {
+    const w = CR.timeWarned || (CR.timeWarned = {});
+    for (const m of [5, 1]) {
+      if (left <= m * 60 && left > m * 60 - 50 && w[App.exam.id + m] === undefined) {
+        w[App.exam.id + m] = true;
+        toast(`⏱ ${m} minute${m > 1 ? 's' : ''} left. Submit what you have done.`, 6000);
+      } else if (left <= m * 60 - 50) w[App.exam.id + m] = true;
+    }
+  }
 }
 function finishExam(handedIn = false) {
   if (!App.exam || CR.examOver) return;
@@ -419,6 +435,12 @@ document.addEventListener('visibilitychange', () => setAway(document.hidden));
 window.addEventListener('blur', () => setAway(true));
 window.addEventListener('focus', () => { if (!document.hidden) setAway(false); });
 window.addEventListener('pagehide', () => setAway(true));
+// leaving the page during the real test (closing the tab, reload by mistake): the browser asks first
+window.addEventListener('beforeunload', (e) => {
+  if (App.leaveOk || !App.exam || App.exam.practice || CR.examOver || examEntry().done) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 // A program (or quiz answers) the student never submitted is graded at the end, so nothing is lost
 function submitForgotten() {
   for (const id of App.exam.challenges) {

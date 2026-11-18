@@ -222,7 +222,7 @@ body.mc .choice.blank:hover { border-color: #0f8a8c; background: #eefafa; }
 body.mc .choice.test:hover { border-color: #5b3cc4; background: #f4f0ff; }
 @media (max-width: 760px) { body.mc .choices { grid-template-columns: 1fr; } }
 body.mc.preview #mcHeader { background: #b36b00; }
-.toast { top: 66px; }
+.toast { top: auto; bottom: 24px; }  /* never over the bar of steps or the toolbar */
 @media (max-width: 1250px) { :root { --sim-w: 290px; } .mc-project input { width: 150px; } .mc-brand small { display: none; } }
 @media (max-width: 1050px) { .mc-toggle button { padding: 0 12px; } .mc-student { max-width: 120px; } }
 

@@ -768,13 +768,14 @@ class Api:
             if not exam.get('active') or time.time() > exam.get('endsAt', 0):
                 return 404, {'error': 'There is no test open for your class right now.'}
             given = re.sub(r'\s+', '', str(data.get('testCode') or ''))
-            if g != '*' and given != self.test_codes().get(cls):
-                return 403, {'error': 'Wrong test password. Ask your teacher.'}
             sid = str(data.get('studentId') or '')
+            if sid and not ID.fullmatch(sid):
+                return 400, {'error': 'bad request'}
+            res = jload(self.r(['HGET', P + 'examres:' + exam['id'], sid])[0], {}) or {} if sid else {}
+            # a student already in this test (page reloaded, other computer) comes back without the password
+            if g != '*' and given != self.test_codes().get(cls) and not (res.get('joined') and data.get('resume')):
+                return 403, {'error': 'Wrong test password. Ask your teacher.', 'needCode': True}
             if sid:
-                if not ID.fullmatch(sid):
-                    return 400, {'error': 'bad request'}
-                res = jload(self.r(['HGET', P + 'examres:' + exam['id'], sid])[0], {}) or {}
                 if res.get('finishedAt'):
                     return 403, {'error': 'You have already submitted this test.', 'finished': True}
                 if not res.get('joined'):
