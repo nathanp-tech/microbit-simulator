@@ -282,9 +282,9 @@ function renderExamResults() {
       <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
     ${X.fromFile ? `<p class="warn-box">📂 Opened from the backup file <b>${esc(X.fromFile)}</b>: changing a mark needs the database.</p>` : ''}
     <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade<br><span class="muted">/7</span></th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
-    ${rows.map(({ r, sheet, g7 }) => `<tr${r.missing ? ' class="absent"' : ''}><td>${r.missing ? `<b>${esc(r.name)}</b> <span class="muted">no result</span>` : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="See the whole exam of this student"><b>${esc(r.name)}</b></button>`}</td>
-      ${sheet.items.map((it) => (!it.submitted && !it.changed ? '<td class="muted">—</td>'
-    : `<td><button class="linklike${it.changed ? ' mark-changed' : ''}" data-exview="${esc(r.studentId)}:${esc(it.chId)}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : 'Automatic mark'} · click to see the work">${fmtMark(it.mark)}${it.changed ? ' ✎' : ''}</button></td>`)).join('')}
+    ${rows.map(({ r, sheet, g7 }) => `<tr${r.missing ? ' class="absent"' : ''}><td><button class="linklike" data-exstudent="${esc(r.studentId || 'name:' + r.name)}" title="See the whole exam of this student"><b>${esc(r.name)}</b></button>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
+      ${sheet.items.map((it) => (r.missing ? '<td class="muted">—</td>'
+    : `<td><input type="number" class="cell-mark${it.changed ? ' mark-changed' : ''}${!it.submitted && !it.changed ? ' empty' : ''}" data-sid="${esc(r.studentId)}" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : it.submitted ? 'Automatic mark: type another one to change it' : 'Nothing submitted'}"></td>`)).join('')}
       <td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b>${fmtMark(sheet.total)}</b></button>`}</td><td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b class="grade">${g7 === undefined ? '—' : g7}</b></button>`}</td>
       <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
       <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table></div>`);
@@ -313,6 +313,20 @@ function renderExamResults() {
   document.querySelectorAll('[data-exview]').forEach((b) => {
     b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); examViewer(sid, Math.max(0, e.challenges.indexOf(cid))); };
   });
+  // a mark changed in the table: saved at once, totals, grades and the curve follow
+  document.querySelectorAll('.cell-mark').forEach((inp) => {
+    inp.onchange = async () => {
+      let v = Number(inp.value);
+      if (inp.value === '' || !isFinite(v)) { inp.value = ''; return; }
+      v = Math.max(0, Math.min(Number(inp.dataset.max), halfMark(v)));
+      if (X.fromFile) { alert('Opened from a backup file: changing a mark needs the database.'); return; }
+      const box = $('modal').querySelector('.modal-box'), y = box.scrollTop;
+      await saveMark(inp.dataset.sid, inp.dataset.key, v);
+      renderExamResults();
+      $('modal').querySelector('.modal-box').scrollTop = y;
+    };
+    inp.onkeydown = (ev) => { if (ev.key === 'Enter') inp.blur(); };
+  });
   document.querySelectorAll('[data-exstudent]').forEach((b) => { b.onclick = () => examViewer(b.dataset.exstudent, 0); });
 }
 
@@ -338,8 +352,10 @@ function stopExamViewer() {
 function examViewer(sid, part = 0, back = renderExamResults) {
   stopWatch();
   stopExamViewer();
-  const e = X.exam, list = examRows().filter(({ r }) => !r.missing);
-  const idx = list.findIndex(({ r }) => r.studentId === sid);
+  // every student of the class (the class list), with or without a result
+  const e = X.exam, list = examRows();
+  const keyOf = (r) => r.studentId || 'name:' + r.name;
+  const idx = list.findIndex(({ r }) => keyOf(r) === sid);
   if (idx < 0) return back();
   const { r, sheet, g7 } = list[idx];
   const partMarks = (id) => { const its = sheet.items.filter((it) => it.chId === id); return { got: its.reduce((a, it) => a + it.mark, 0), max: its.reduce((a, it) => a + it.max, 0), sent: its.some((it) => it.submitted), changed: its.some((it) => it.changed) }; };
@@ -371,14 +387,24 @@ function examViewer(sid, part = 0, back = renderExamResults) {
   openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
       <h2>${esc(r.name)} <span class="muted">· ${esc(e.title)}</span></h2><span style="flex:1"></span>
       <span class="ev-total">${fmtMark(sheet.total)} / ${fmtMark(sheet.max)} · grade <b>${g7 === undefined ? '—' : g7} / 7</b></span>
-      <button id="evPrev"${idx ? '' : ' disabled'} title="Previous student">‹ Previous</button><span class="muted">${idx + 1} / ${list.length}</span><button id="evNext"${idx < list.length - 1 ? '' : ' disabled'} title="Next student">Next ›</button></div>
+      <button id="evPrev"${idx ? '' : ' disabled'} title="Previous student (←)">‹</button>
+      <select id="evPick" title="Go to a student">${list.map((x, i) => `<option value="${esc(keyOf(x.r))}"${i === idx ? ' selected' : ''}>${esc(x.r.name)}${x.r.missing ? ' · no result' : ` · ${fmtMark(x.sheet.total)}/${fmtMark(x.sheet.max)}${x.g7 !== undefined ? ' · ' + x.g7 + '/7' : ''}`}</option>`).join('')}</select>
+      <button id="evNext"${idx < list.length - 1 ? '' : ' disabled'} title="Next student (→)">›</button><span class="muted">${idx + 1} / ${list.length}</span></div>
       <nav class="ev-nav">${nav}</nav></div>
-    <div class="ev-body">${e.challenges.map(section).join('')}</div>`);
+    <div class="ev-body">${r.missing ? `<p class="ev-none">${esc(r.name)} has no result for this exam (did not open it, or nothing was sent).</p>` : e.challenges.map(section).join('')}</div>`);
   $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
   const box = $('modal').querySelector('.modal-box');
   $('evBack').onclick = () => { stopExamViewer(); back(); };
-  $('evPrev').onclick = () => examViewer(list[idx - 1].r.studentId, 0, back);
-  $('evNext').onclick = () => examViewer(list[idx + 1].r.studentId, 0, back);
+  const go = (i) => { if (list[i]) examViewer(keyOf(list[i].r), 0, back); };
+  $('evPrev').onclick = () => go(idx - 1);
+  $('evNext').onclick = () => go(idx + 1);
+  $('evPick').onchange = () => examViewer($('evPick').value, 0, back);
+  // ← / → from student to student (not while typing a mark)
+  document.onkeydown = (ev) => {
+    if (!document.querySelector('.ev-body') || $('modal').hidden || /INPUT|SELECT|TEXTAREA/.test((ev.target || {}).tagName || '')) return;
+    if (ev.key === 'ArrowLeft') go(idx - 1);
+    if (ev.key === 'ArrowRight') go(idx + 1);
+  };
   document.querySelectorAll('[data-evgo]').forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); const t = $('ev-' + a.dataset.evgo); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }; });
   // marks: saved at once, the page shows the new totals (same place on the page)
   const again = () => { const y = box.scrollTop; examViewer(sid, 0, back); $('modal').querySelector('.modal-box').scrollTop = y; };

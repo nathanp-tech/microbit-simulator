@@ -53,6 +53,8 @@ The welcome page has two choices only:
 
 **Grade out of 7 (bell curve per class):** each student's total is placed against the class (z = (total − class average) / standard deviation), then put on a normal curve of an average grade and a spread you choose in the results (default 4.5 and 1.2), rounded between 1 and 7; a histogram shows the grades of the class. Click a student's name, total or grade (or their grade in the live view) to see **all their answers stacked** — quiz answers, programs in blocks running on a micro:bit, the automatic check — with each mark that you can change.
 
+**Voice alerts:** the dashboard says out loud "Georgi left the exam page" (or "closed the exam page") once each time a student leaves during an exam; the 🔊 / 🔇 button at the top turns it on or off (remembered on this computer). Browsers only speak after a first click on the page.
+
 **Backups on this computer:** when an exam ends (time over or stopped), the open dashboard downloads one JSON file with the exam and every result (programs, answers, marks, grades). 💾 saves one at any time; *Exams & results → 📂 Open a backup file* shows the results from such a file if the database has a problem.
 
 **Quiz:** the quiz comes first; students can come back, change their answers and send them again (the last answers count).

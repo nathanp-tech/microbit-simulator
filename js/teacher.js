@@ -113,6 +113,7 @@ async function refreshLive() {
     T.classctl = data.classctl || {};
     renderHelpQueue();
     renderLive();
+    voiceAlerts();
     refreshGrades();
     autoBackupExams();
     $('liveStatus').textContent = '● Live · updated ' + new Date().toLocaleTimeString();
@@ -121,6 +122,40 @@ async function refreshLive() {
     $('liveStatus').textContent = '⚠️ Server unreachable';
     $('liveStatus').classList.remove('on');
   }
+}
+
+// ---------- 🔊 Voice alert: say it out loud when a student leaves the exam page (can be turned off) ----------
+const VOICE_KEY = 'mbsim.voiceAlerts';
+const voiceOn = () => { try { return localStorage.getItem(VOICE_KEY) !== 'off'; } catch (e) { return true; } };
+function renderVoiceButton() {
+  const b = $('btnVoice');
+  if (!b) return;
+  const on = voiceOn();
+  b.textContent = on ? '🔊 Voice alerts on' : '🔇 Voice alerts off';
+  b.classList.toggle('on', on);
+}
+function say(text) {
+  if (!voiceOn() || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-GB';
+  u.rate = 1;
+  speechSynthesis.speak(u);
+}
+// once per departure: a new count of "left the page", or the page closed during the exam
+function voiceAlerts() {
+  T.announced = T.announced || new Set();
+  const first = !T.voiceReady;
+  for (const s of T.live) {
+    const ex = s.live && s.live.exam;
+    if (!ex || ex.practice || ex.over || ex.done) continue;
+    const st = liveStatus(s);
+    if (st.cls !== 'away') continue;
+    const key = `${s.studentId}:${ex.id}:${ex.awayN || 0}:${ex.away ? 'away' : 'closed'}`;
+    if (T.announced.has(key)) continue;
+    T.announced.add(key);
+    if (!first) say(ex.away ? `${s.name} left the exam page` : `${s.name} closed the exam page`);
+  }
+  T.voiceReady = true; // what was already happening when the dashboard opened is not announced
 }
 
 // ---------- Test grades: the latest test of each class, with the marks changed by the teacher ----------
@@ -803,6 +838,13 @@ function init() {
   renderFiles();
   showServerInfo();
   $('shareClass').onchange = () => showShare(T.publicBase);
+  renderVoiceButton();
+  $('btnVoice').onclick = () => {
+    const on = !voiceOn();
+    try { localStorage.setItem(VOICE_KEY, on ? 'on' : 'off'); } catch (e) { /* private window */ }
+    renderVoiceButton();
+    if (on) say('Voice alerts on'); else if (window.speechSynthesis) speechSynthesis.cancel();
+  };
   $('btnLogout').onclick = () => { localStorage.removeItem('mbsim.teacherCode'); location.href = 'index.html'; };
   $('btnCode').onclick = () => { T.code = $('tcode').value.trim(); localStorage.setItem('mbsim.teacherCode', T.code); startLive(); };
   $('tcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnCode').click(); });
