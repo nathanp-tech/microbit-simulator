@@ -393,3 +393,4 @@ body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, bo
 .mc-tut[data-unit="test"] .mc-tut-head { background: linear-gradient(135deg, #6633cc, #b4009e); }
 .mc-tut[data-unit="blank"] .mc-mission-label { color: #0f8a8c; }
 .mc-tut[data-unit="test"] .mc-mission-label { color: #6633cc; }
+.sb-m { font-size: 11px; font-weight: 700; color: #5b3cc4; background: #f1edff; border-radius: 8px; padding: 1px 6px; margin-left: 2px; white-space: nowrap; }

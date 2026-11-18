@@ -137,7 +137,7 @@ const CHALLENGES = [
   // ---------------- 🧪 Blank test ----------------
   {
     id: 'quiz-blank', cat: 'blank', level: 2, title: 'Quiz (blank test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. You can come back and change your answers: the last ones you send count.',
+    description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
       { marks: 3, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
@@ -193,7 +193,7 @@ const CHALLENGES = [
   // ---------------- 📝 Test ----------------
   {
     id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. You can come back and change your answers: the last ones you send count.',
+    description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
       { marks: 2, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },

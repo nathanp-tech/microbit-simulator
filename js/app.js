@@ -843,7 +843,7 @@ function renderStepBar() {
     const c = CHALLENGES.find((x) => x.id === id) || { title: id }, s = state(id), cur = App.challenge.id === id;
     const label = c.quiz ? 'Quiz' : c.title;
     const tip = s === 'locked' ? 'Pass the step before to open this one' : s === 'done' ? (App.exam ? 'Submitted' : 'Done') : 'To do';
-    return `${i ? '<span class="sb-line"></span>' : ''}<button class="sb-step ${s}${cur ? ' current' : ''}" data-ch="${esc(id)}" title="${esc(label)} · ${tip}"${s === 'locked' ? ' disabled' : ''}><span class="sb-n">${s === 'done' ? '✓' : s === 'locked' ? '🔒' : i + 1}</span><span class="sb-t">${esc(label)}</span></button>`;
+    return `${i ? '<span class="sb-line"></span>' : ''}<button class="sb-step ${s}${cur ? ' current' : ''}" data-ch="${esc(id)}" title="${esc(label)} · ${tip}"${s === 'locked' ? ' disabled' : ''}><span class="sb-n">${s === 'done' ? '✓' : s === 'locked' ? '🔒' : i + 1}</span><span class="sb-t">${esc(label)}</span>${App.exam && (c.marks || c.quiz) ? `<span class="sb-m">${chMarks(c)} marks</span>` : ''}</button>`;
   }).join('')}</div>${App.exam ? `<span id="sbTimer" class="sb-timer"></span>${CR.examOver ? '' : '<button id="btnFinishTest" class="sb-finish" title="Hand in the whole test when you have finished">✅ Submit my test</button>'}` : ''}`;
   bar.hidden = false;
   if (App.exam) updateExamBanner();
@@ -900,7 +900,7 @@ function showQuiz(slot) {
   };
   $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)} <span class="q-marks">· ${chMarks(ch)} marks</span></h2><p class="muted">${ch.description}</p>
     ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="q-marks">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
-    <div style="text-align:right;margin-top:10px">${locked ? '' : `${sent ? '<span class="muted">✅ Sent. You can change your answers and send them again: the last ones count.</span> ' : ''}<button class="mc-btn green" id="quizCheck">${App.exam ? (sent ? '📨 Send my answers again' : '📨 Send my answers') : '✅ Check my answers'}</button>`}</div></div>`;
+    <div style="text-align:right;margin-top:10px">${locked ? '' : App.exam ? `<span class="muted">💾 Your answers are saved as you click. You can come back and change them until the end.</span> <button class="mc-btn green" id="quizCheck">Next ›</button>` : '<button class="mc-btn green" id="quizCheck">✅ Check my answers</button>'}</div></div>`;
   renderQuizCode($('quizView'), ch.questions);
   $('quizView').querySelectorAll('input[type=radio], input[type=checkbox]').forEach((r) => {
     r.onchange = () => {
@@ -913,11 +913,31 @@ function showQuiz(slot) {
       s.quizMarks = null;
       s.programAt = new Date().toISOString();
       Progress.persist();
+      if (App.exam && !CR.examOver) autoSendQuiz(); // in an exam: every change counts, even after the first send
       // only the labels change (the blocks of the questions stay drawn)
       $('quizView').querySelectorAll(`input[name="q${i}"]`).forEach((x) => { x.parentElement.className = x.checked ? 'picked' : ''; });
     };
   });
   if ($('quizCheck')) $('quizCheck').onclick = evaluate;
+}
+// the quiz answers of an exam are sent a moment after each change (no move to another part)
+let quizSendTimer = null;
+function autoSendQuiz() {
+  clearTimeout(quizSendTimer);
+  const ch = App.challenge;
+  quizSendTimer = setTimeout(() => {
+    if (!App.exam || CR.examOver || !ch || !ch.quiz) return;
+    const answers = (examSlot(ch.id).answers || []).slice();
+    const slot = examSlot(ch.id), program = { quiz: true, answers };
+    const res = gradeQuiz(ch, answers);
+    slot.checks++;
+    slot.sentProgram = program;
+    slot.best = res.score;
+    slot.bestProgram = program;
+    Progress.persist();
+    queueExamResult({ studentId: Progress.data.studentId, examId: App.exam.id, challengeId: ch.id, score: res.score, program, robot: null, name: Progress.data.name, className: Progress.data.className });
+    if (App.challenge && App.challenge.id === ch.id) { renderExam(); renderStepBar(); }
+  }, 1200);
 }
 function hideQuiz() { $('quizView').hidden = true; $('blocklyDiv').style.visibility = ''; document.body.classList.remove('quiz-mode'); }
 
@@ -929,7 +949,12 @@ async function evaluate() {
   let res;
   if (ch.quiz) {
     const answers = quizAnswers();
-    if (ch.questions.some((q, i) => !quizAnswered(q, answers[i]))) { toast('Answer every question first.'); return; }
+    if (App.exam) {
+      // answers are already sent as they are clicked: send now (in case) and go on
+      clearTimeout(quizSendTimer);
+      const missing = ch.questions.filter((q, i) => !quizAnswered(q, answers[i])).length;
+      if (missing) toast(`⚠️ ${missing} question${missing > 1 ? 's' : ''} not answered yet: you can come back to the quiz later.`, 4500);
+    } else if (ch.questions.some((q, i) => !quizAnswered(q, answers[i]))) { toast('Answer every question first.'); return; }
     res = gradeQuiz(ch, answers);
     const slot = workSlot();
     if (!App.exam) slot.quizMarks = res.criteria.map((c) => c.ok);

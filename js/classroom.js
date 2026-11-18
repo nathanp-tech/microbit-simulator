@@ -277,7 +277,7 @@ function renderExam() {
   $('btnHint').hidden = slot.hints >= hints.length;
   $('btnHint').textContent = `💡 Hint (${slot.hints + 1}/${hints.length})`;
   $('btnEvaluate').hidden = CR.examOver || !!ch.quiz;
-  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">${slot.checks ? '✅ Your answers are sent. You can still change them and send them again.' : 'Answer every question, then click <b>📨 Send my answers</b>.'}</div>`
+  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">💾 Your answers are saved as you click. You can come back to the quiz and change them until the end of the exam.</div>`
     : `<div class="exam-note">${slot.checks ? '✅ <b>Submitted.</b> Improved it? Test it, then submit again.' : 'Test it in the simulator. When it works, submit it.'}</div>`;
   updateButtons();
   renderStepBar();
@@ -302,7 +302,7 @@ function onExamGrade(res) {
   // no score in the exam: straight on to the next challenge not submitted yet (the bar of steps leads back to any of them)
   const order = App.exam.challenges, k = order.indexOf(id);
   const next = order.slice(k + 1).concat(order.slice(0, k)).find((c) => !examSlot(c).checks);
-  const sent = ch.quiz ? '✅ Answers sent' : '📨 Program submitted';
+  const sent = ch.quiz ? '✅ Answers saved' : '📨 Program submitted';
   if (next) {
     enterExamChallenge(next);
     toast(`${sent}. Next: ${chTitle(next)}`, 4000);
