@@ -8,8 +8,8 @@ const CATEGORIES = [
   { id: 'test', icon: '📝', label: 'Test' },
 ];
 // the two tests of 40 minutes: the blank test (practice, no password) and the test (password of the class)
-const BLANK_TEST = ['quiz-blank', 'faces', 'dice-dots', 'light-a'];
-const REAL_TEST = ['quiz-test', 'temp-b', 'rps', 'compass'];
+const BLANK_TEST = ['quiz-blank', 'faces', 'dice-dots', 'sound-a'];
+const REAL_TEST = ['quiz-test', 'temp-b', 'rps', 'light-levels'];
 // the exams the teacher can start (📝 Start an exam): add a new one here (its challenges must be in CHALLENGES)
 const EXAMS = [
   { id: 'blank', title: 'Blank exam', challenges: BLANK_TEST, minutes: 40, note: 'The practice exam: students can also start it alone with the 🧪 Blank test card.' },
@@ -126,9 +126,10 @@ const QB = (() => {
       [cmp(sensor('input_compass'), 'LT', num(315)), [str('E')]]], [str('N')])) })),
   };
 })();
-// the letter of a compass heading (N 315–45, E 45–135, S 135–225, W 225–315)
-function compassRound(make, heading) {
-  const T = make().wait(1000); T.setHeading(heading); const t0 = T.t; T.wait(3000);
+// what a "forever" program shows last once a sensor is set (compass letter, light level…)
+function compassRound(make, heading) { return sensorRound(make, (T) => T.setHeading(heading)); }
+function sensorRound(make, set) {
+  const T = make().wait(1000); set(T); const t0 = T.t; T.wait(3000);
   const t = T.texts(t0).map((x) => x.trim().toUpperCase()).filter(Boolean);
   return t.length ? t[t.length - 1] : '';
 }
@@ -180,14 +181,14 @@ const CHALLENGES = [
     })(),
   },
   {
-    id: 'light-a', marks: 4, cat: 'blank', level: 1, title: 'Light meter', lesson: 'Unit 3',
-    description: '<ul class="steps"><li>Press [[btn:A]] → show the <b>light level</b> (from 0 = dark to 255 = bright)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board), then press A.</p>',
-    skills: 'on button A pressed, light level, show number',
-    hints: ['Put "show number" inside "on button A pressed".', 'Drag "light level" (Input) into the show number block.'],
+    id: 'sound-a', marks: 4, cat: 'blank', level: 1, title: 'Sound meter', lesson: 'Unit 3',
+    description: '<ul class="steps"><li>Press [[btn:A]] → show the <b>sound level</b> (from 0 = silent to 255 = very loud)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>sound bar</b> (right of the LEDs) up or down, then press A.</p>',
+    skills: 'on button A pressed, sound level, show number',
+    hints: ['Put "show number" inside "on button A pressed".', 'Drag "sound level" (Input) into the show number block.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
     tests: [
-      { label: 'A shows the light level (dark: 30)', points: 50, run: (make) => { const T = make().wait(1500); T.setLight(30); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(30); } },
-      { label: 'A shows the light level (bright: 200)', points: 50, run: (make) => { const T = make().wait(1500); T.setLight(200); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(200); } },
+      { label: 'A shows the sound level (quiet: 40)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(40); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(40); } },
+      { label: 'A shows the sound level (loud: 180)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(180); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(180); } },
     ],
   },
   // ---------------- 📝 Test ----------------
@@ -231,16 +232,16 @@ const CHALLENGES = [
     })(),
   },
   {
-    id: 'compass', marks: 5, cat: 'test', level: 2, title: 'Compass', lesson: 'Unit 4',
-    description: '<ul class="steps"><li>Always show where the micro:bit points: <b>N</b>, <b>E</b>, <b>S</b> or <b>W</b> [[text:N]] [[text:E]] [[text:S]] [[text:W]]</li><li>N = 0°, E = 90°, S = 180°, W = 270° (compass heading)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>logo</b> at the top of the board round and round: the heading changes (shown on the logo). Watch the letter.</p>',
-    skills: 'forever, compass heading, if / else if, comparison',
-    hints: ['forever → if (compass heading < 45) then show string "N", else if (compass heading < 135) then show string "E"…', 'Click ⊕ on the if block to add the "else if" parts. The last part (else) shows "N" again.'],
+    id: 'light-levels', marks: 5, cat: 'test', level: 2, title: 'Light levels', lesson: 'Unit 3',
+    description: '<ul class="steps"><li>Always show how bright it is, from <b>1</b> (dark) to <b>4</b> (very bright) [[text:1]] [[text:2]] [[text:3]] [[text:4]]</li><li>light level 0 to 63 → 1 · 64 to 127 → 2 · 128 to 191 → 3 · 192 to 255 → 4</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the yellow <b>light circle</b> (top left of the board) up and down. Watch the number.</p>',
+    skills: 'forever, light level, if / else if, comparison',
+    hints: ['forever → if (light level < 64) then show number 1, else if (light level < 128) then show number 2…', 'Click ⊕ on the if block to add the "else if" parts. The last part (else) shows 4.'],
     tests: [
-      { label: 'Heading 10° shows N', points: 20, run: (make) => compassRound(make, 10) === 'N' },
-      { label: 'Heading 90° shows E', points: 20, run: (make) => compassRound(make, 90) === 'E' },
-      { label: 'Heading 180° shows S', points: 20, run: (make) => compassRound(make, 180) === 'S' },
-      { label: 'Heading 270° shows W', points: 20, run: (make) => compassRound(make, 270) === 'W' },
-      { label: 'Heading 350° shows N', points: 20, run: (make) => compassRound(make, 350) === 'N' },
+      { label: 'Light 10 shows 1', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(10)) === '1' },
+      { label: 'Light 90 shows 2', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(90)) === '2' },
+      { label: 'Light 160 shows 3', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(160)) === '3' },
+      { label: 'Light 240 shows 4', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(240)) === '4' },
+      { label: 'Light 40 shows 1', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(40)) === '1' },
     ],
   },
 ];

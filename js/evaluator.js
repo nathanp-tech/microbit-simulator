@@ -31,6 +31,7 @@ class Tester {
   setLight(v) { this.mb.light = v; return this; }
   setTemp(v) { this.mb.temperature = v; return this; }
   setHeading(v) { this.mb.heading = v; return this; }
+  setSound(v) { this.mb.setSoundLevel(v); return this; }
 
   // ---- what was shown ----
   log(t0 = 0, t1 = Infinity) { return this.mb.log.filter((e) => e.t >= t0 && e.t <= t1); }

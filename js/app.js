@@ -693,7 +693,7 @@ async function startBlankTest() {
     if (!Progress.data || $('welcome').hidden === false) return;
     const now = Sync.now() / 1000;
     let e = Progress.data.blankTest;
-    const old = e && (now > e.endsAt || ((Progress.data.exams || {})[e.id] || {}).done);
+    const old = e && (now > e.endsAt || ((Progress.data.exams || {})[e.id] || {}).done || e.challenges.join() !== BLANK_TEST.join());  // finished, or made with an older list of parts
     if (!e || old) {
       e = { id: 'p' + Date.now().toString(36), practice: true, title: 'Blank test', className: Progress.data.className, challenges: BLANK_TEST.slice(),
         minutes: 40, hints: false, startedAt: now, endsAt: now + 40 * 60, stoppedAt: null, active: true };

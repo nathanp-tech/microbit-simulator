@@ -46,7 +46,7 @@ The welcome page has two choices only:
 |---|---|---|---|
 | 1 | Happy and sad (A happy, B sad) | Thermometer (B → temperature) | the button shows the right thing (and nothing before) |
 | 2 | Dice with dots (shake → 1 to 6 dots with show leds) | Rock Paper Scissors | 60 / 45 shakes: always a face, every face can appear |
-| 3 | Light meter (A → light level) | Compass (forever: N / E / S / W from the heading) | light 30 and 200 / headings 10°, 90°, 180°, 270°, 350° |
+| 3 | Sound meter (A → sound level), never seen before | Light levels (forever: 1 / 2 / 3 / 4 from the light level, same logic as the compass), never seen before | sound 40 and 180 / light 10, 90, 160, 240, 40 |
 | 4 | Quiz, 6 questions | Quiz, 6 questions | sensors (tick all), inputs and outputs, a variable, programs in blocks to debug (wrong button, shake counter reset each time, compass E / W swapped, light level → 0) |
 
 **Marks:** each part has its marks, shown to the students (challenge: `marks` in `js/challenges.js`, quiz question: `marks`); both exams are out of 25. The automatic mark is the check score × the marks (or the answer of the question), rounded to half marks; the grade is the Swiss scale from the total. Results → **✏️ Mark question by question**: one question at a time, every student's program (in blocks) or answer, the automatic mark, and a field to change it (↺ auto goes back). The live view shows each student's marks and grade for the latest exam of their class (updated when you change a mark); click it for the results.
