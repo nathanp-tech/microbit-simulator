@@ -8,8 +8,8 @@ const CATEGORIES = [
   { id: 'test', icon: '📝', label: 'Test' },
 ];
 // the two tests of 40 minutes: the blank test (practice, no password) and the test (password of the class)
-const BLANK_TEST = ['quiz-blank', 'faces', 'dice-dots', 'sound-a'];
-const REAL_TEST = ['quiz-test', 'temp-b', 'rps', 'light-levels'];
+const BLANK_TEST = ['quiz-blank', 'faces', 'rps', 'sound-a'];
+const REAL_TEST = ['quiz-test', 'temp-b', 'dice-dots', 'light-levels'];
 // the exams the teacher can start (📝 Start an exam): add a new one here (its challenges must be in CHALLENGES)
 const EXAMS = [
   { id: 'blank', title: 'Blank exam', challenges: BLANK_TEST, minutes: 40, note: 'The practice exam: students can also start it alone with the 🧪 Blank test card.' },
@@ -141,7 +141,7 @@ const CHALLENGES = [
     description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
-      { marks: 3, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
+      { marks: 3, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
       { marks: 1, q: 'Is button A an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
       { marks: 1, q: 'Is the LED screen of the micro:bit an INPUT?', options: ['No, never', 'Yes: the LEDs also measure the light level', 'Yes: it detects the buttons', 'Only when it is off'], answer: 1 },
       { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
@@ -165,18 +165,17 @@ const CHALLENGES = [
     ],
   },
   {
-    id: 'dice-dots', marks: 6, cat: 'blank', level: 2, title: 'Dice with dots', lesson: 'Unit 2',
-    description: `<ul class="steps"><li>[[shake]] → a dice face from <b>1 to 6</b> on the LED screen, with dots (one LED = one dot):<br>${DICE_FACES.map((f) => `[[img:${f}]]`).join(' ')}</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> many times: do all six faces appear?</p>`,
-    skills: 'on shake, variables, pick random, if / else if, show leds',
-    hints: ['Variables → Make a Variable… → roll. Then "set roll to pick random 1 to 6" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare "roll = 1", "roll = 2"… and put a "show leds" with the right dots in each part.'],
+    id: 'rps', marks: 6, cat: 'blank', level: 2, title: 'Rock Paper Scissors', lesson: 'Unit 2',
+    description: '<ul class="steps"><li>[[shake]] → show <b>rock</b>, <b>paper</b> or <b>scissors</b> at random on the LED screen, for example [[icon:SmallSquare]] [[icon:Square]] [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
+    skills: 'variables, pick random, if / else if',
+    hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
-      // what is on the screen after each shake: the number of lit LEDs (the dots)
-      const rolls = (make) => { const T = make(7).wait(3000); const out = []; for (let i = 0; i < 60; i++) { const t0 = T.t; T.shake(1500); out.push(T.images(t0).length ? T.litCount() : 0); } return out; };
+      const shakes = (make) => { const T = make(11).wait(3000); const out = []; for (let i = 0; i < 45; i++) { const t0 = T.t; T.shake(1500); const r = reacted(T, t0); out.push(r.length ? r[r.length - 1] : null); } return out; };
       return [
-        { label: 'Dots appear after every shake', points: 30, run: (make) => { const r = rolls(make); const k = r.filter((n) => n > 0).length / r.length; return k >= 0.95 ? 1 : k * 0.8; } },
-        { label: 'Always 1 to 6 dots', points: 35, run: (make) => { const r = rolls(make); return r.some((n) => n > 0) && r.every((n) => n >= 1 && n <= 6); } },
-        { label: 'All six faces can appear (1, 2, 3, 4, 5 and 6 dots)', points: 35, run: (make) => { const all = new Set(rolls(make)); return [1, 2, 3, 4, 5, 6].filter((n) => all.has(n)).length / 6; } },
+        { label: 'A picture appears after every shake', points: 30, run: (make) => { const s = shakes(make); return s.filter(Boolean).length / s.length >= 0.95 ? 1 : 0.5 * s.filter(Boolean).length / s.length; } },
+        { label: 'Three different pictures can appear (rock, paper, scissors)', points: 40, run: (make) => { const d = distinct(shakes(make).filter(Boolean)).length; return d === 3 ? 1 : d === 2 ? 0.4 : d > 3 ? 0.5 : 0; } },
+        { label: 'Uses pick random and if / else', points: 30, always: true, run: (make, p) => ['math_random', 'controls_if'].filter((t) => (p.blockTypes || []).includes(t)).length / 2 },
       ];
     })(),
   },
@@ -197,7 +196,7 @@ const CHALLENGES = [
     description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
-      { marks: 2, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
+      { marks: 2, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
       { marks: 1, q: 'Is the LED screen an output?', options: ['Yes: it shows pictures, numbers and text', 'No: it is only an input', 'No: it is a sensor', 'Only with the radio'], answer: 0 },
       { marks: 2, q: 'What is a variable?', options: ['A box with a name that keeps a value; the value can change', 'A block that repeats forever', 'A sensor of the micro:bit', 'A picture on the LED screen'], answer: 0 },
       { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
@@ -217,17 +216,18 @@ const CHALLENGES = [
     ],
   },
   {
-    id: 'rps', marks: 6, cat: 'test', level: 2, title: 'Rock Paper Scissors', lesson: 'Unit 2',
-    description: '<ul class="steps"><li>[[shake]] → show <b>rock</b>, <b>paper</b> or <b>scissors</b> at random on the LED screen, for example [[icon:SmallSquare]] [[icon:Square]] [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
-    skills: 'variables, pick random, if / else if',
-    hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
+    id: 'dice-dots', marks: 6, cat: 'test', level: 2, title: 'Dice with dots', lesson: 'Unit 2',
+    description: `<ul class="steps"><li>[[shake]] → a dice face from <b>1 to 6</b> on the LED screen, with dots (one LED = one dot):<br>${DICE_FACES.map((f) => `[[img:${f}]]`).join(' ')}</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> many times: do all six faces appear?</p>`,
+    skills: 'on shake, variables, pick random, if / else if, show leds',
+    hints: ['Variables → Make a Variable… → roll. Then "set roll to pick random 1 to 6" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare "roll = 1", "roll = 2"… and put a "show leds" with the right dots in each part.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
-      const shakes = (make) => { const T = make(11).wait(3000); const out = []; for (let i = 0; i < 45; i++) { const t0 = T.t; T.shake(1500); const r = reacted(T, t0); out.push(r.length ? r[r.length - 1] : null); } return out; };
+      // what is on the screen after each shake: the number of lit LEDs (the dots)
+      const rolls = (make) => { const T = make(7).wait(3000); const out = []; for (let i = 0; i < 60; i++) { const t0 = T.t; T.shake(1500); out.push(T.images(t0).length ? T.litCount() : 0); } return out; };
       return [
-        { label: 'A picture appears after every shake', points: 30, run: (make) => { const s = shakes(make); return s.filter(Boolean).length / s.length >= 0.95 ? 1 : 0.5 * s.filter(Boolean).length / s.length; } },
-        { label: 'Three different pictures can appear (rock, paper, scissors)', points: 40, run: (make) => { const d = distinct(shakes(make).filter(Boolean)).length; return d === 3 ? 1 : d === 2 ? 0.4 : d > 3 ? 0.5 : 0; } },
-        { label: 'Uses pick random and if / else', points: 30, always: true, run: (make, p) => ['math_random', 'controls_if'].filter((t) => (p.blockTypes || []).includes(t)).length / 2 },
+        { label: 'Dots appear after every shake', points: 30, run: (make) => { const r = rolls(make); const k = r.filter((n) => n > 0).length / r.length; return k >= 0.95 ? 1 : k * 0.8; } },
+        { label: 'Always 1 to 6 dots', points: 35, run: (make) => { const r = rolls(make); return r.some((n) => n > 0) && r.every((n) => n >= 1 && n <= 6); } },
+        { label: 'All six faces can appear (1, 2, 3, 4, 5 and 6 dots)', points: 35, run: (make) => { const all = new Set(rolls(make)); return [1, 2, 3, 4, 5, 6].filter((n) => all.has(n)).length / 6; } },
       ];
     })(),
   },
