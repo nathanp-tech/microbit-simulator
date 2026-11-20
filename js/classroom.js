@@ -308,7 +308,6 @@ function onExamGrade(res) {
   const order = App.exam.challenges, k = order.indexOf(id);
   const next = order.slice(k + 1).concat(order.slice(0, k)).find((c) => !examSlot(c).checks);
   const sent = ch.quiz ? '✅ Answers saved' : '📨 Program submitted';
-  if (App.exam.practice) return practiceFeedback(ch, res, program, next);  // the blank test: feedback and correction
   if (next) {
     enterExamChallenge(next);
     toast(`${sent}. Next: ${chTitle(next)}`, 4000);
@@ -319,41 +318,46 @@ function onExamGrade(res) {
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button onclick="closeModal()">Keep working</button><button class="primary" id="allDoneFinish">✅ Submit my test</button></div>`);
   $('allDoneFinish').onclick = () => { closeModal(); confirmFinishTest(); };
 }
-// Blank test: after each submit, the marks, what worked and the correction (a program that works, or the right answers)
+// Blank test: at the end, the marks of each part, what worked and the correction (a program that works, or the right answers)
 let feedbackWs = [];
-function practiceFeedback(ch, res, program, next) {
-  while (feedbackWs.length) { try { feedbackWs.pop().dispose(); } catch (e) { /* gone */ } }
+function practicePart(ch, res, program, k) {
   const max = chMarks(ch);
-  let got, body;
+  let got = 0, body;
   if (ch.quiz) {
-    const answers = program.answers || [];
-    const marksOf = res.criteria.map((c, i) => halfMark(c.points * (ch.questions[i].marks || 1)));
+    const answers = (program && program.answers) || [];
+    const marksOf = res ? res.criteria.map((c, i) => halfMark(c.points * (ch.questions[i].marks || 1))) : ch.questions.map(() => 0);
     got = marksOf.reduce((a, b) => a + b, 0);
     body = ch.questions.map((q, i) => {
       const m = q.marks || 1, ok = marksOf[i] === m, given = answers[i];
       const yours = q.open ? (typeof given === 'string' && given.trim() ? `“${esc(given)}”` : '<i>no answer</i>')
-        : q.multi ? (Array.isArray(given) && given.length ? given.map((k) => esc(q.options[k])).join(' · ') : '<i>no answer</i>')
+        : q.multi ? (Array.isArray(given) && given.length ? given.map((x) => esc(q.options[x])).join(' · ') : '<i>no answer</i>')
         : given !== undefined && given !== null ? esc(q.options[given]) : '<i>no answer</i>';
-      const right = q.open ? esc(q.model || q.accept[0]) : q.multi ? q.answer.map((k) => esc(q.options[k])).join(' · ') : esc(q.options[q.answer]);
+      const right = q.open ? esc(q.model || q.accept[0]) : q.multi ? q.answer.map((x) => esc(q.options[x])).join(' · ') : esc(q.options[q.answer]);
       return `<div class="fb-q ${ok ? 'ok' : marksOf[i] > 0 ? 'part' : 'ko'}"><div class="fb-q-head"><b>${ok ? '✔' : marksOf[i] > 0 ? '◐' : '✖'} ${i + 1}. ${esc(q.q)}</b><span class="fb-m">${fmtHalf(marksOf[i])} / ${m}</span></div>
-        ${q.code ? `<div class="q-code fb-code" data-fbq="${i}"></div>` : ''}
+        ${q.code ? `<div class="q-code fb-code" data-fbq="${k}:${i}"></div>` : ''}
         <div class="fb-line">Your answer: ${yours}</div>${ok ? '' : `<div class="fb-line fb-right">Right answer: ${right}</div>`}${q.why ? `<div class="fb-why">💡 ${esc(q.why)}</div>` : ''}</div>`;
     }).join('');
   } else {
-    got = halfMark(res.score / 100 * max);
-    body = `<ul class="fb-crit">${res.criteria.map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>
-      ${ch.solution ? `<h3 class="fb-h">✏️ Correction: a program that works</h3><div class="fb-sol" id="fbSol"></div>${ch.solutionNote ? `<p class="fb-why">💡 ${esc(ch.solutionNote)}</p>` : ''}` : ''}`;
+    if (res) got = halfMark(res.score / 100 * max);
+    body = `${res ? `<ul class="fb-crit">${res.criteria.filter((c) => c.max > 0 || !c.ok).map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>` : '<p class="muted">Nothing submitted.</p>'}
+      ${ch.solution ? `<h4 class="fb-h">✏️ Correction: a program that works</h4><div class="fb-sol" data-fbsol="${k}"></div>${ch.solutionNote ? `<p class="fb-why">💡 ${esc(ch.solutionNote)}</p>` : ''}` : ''}`;
   }
   const full = got >= max;
-  openModal(`<div class="fb"><h2>${full ? '🎉' : got > 0 ? '👍' : '💪'} ${esc(ch.title)} · <span class="fb-total">${fmtHalf(got)} / ${max} marks</span></h2>
-    <p class="muted">${full ? 'Perfect!' : 'Look at the correction, then try again if you want: you can submit again (the last one counts).'}</p>
-    ${body}
-    <div class="fb-actions"><button id="fbStay">↺ Try again</button>${next ? `<button class="primary" id="fbNext">Next: ${esc(chTitle(next))} ›</button>` : '<button class="primary" id="fbDone">✅ Finish the blank test</button>'}</div></div>`);
-  $('modalBody').querySelectorAll('[data-fbq]').forEach((div) => { const w = renderProgramInto(div, ch.questions[Number(div.dataset.fbq)].code); if (w) feedbackWs.push(w); });
-  if (ch.solution && $('fbSol')) { const w = renderProgramInto($('fbSol'), ch.solution); if (w) feedbackWs.push(w); }
-  $('fbStay').onclick = () => { closeModal(); if (ch.quiz) showQuiz(examSlot(ch.id)); };
-  if (next) $('fbNext').onclick = () => { closeModal(); enterExamChallenge(next); };
-  else $('fbDone').onclick = () => { closeModal(); confirmFinishTest(); };
+  return { got, max, html: `<section class="fb-part"><h3>${full ? '🎉' : got > 0 ? '👍' : '💪'} ${esc(ch.title)} · <span class="fb-total">${fmtHalf(got)} / ${max} marks</span></h3>${body}</section>` };
+}
+function practiceReport() {
+  while (feedbackWs.length) { try { feedbackWs.pop().dispose(); } catch (e) { /* gone */ } }
+  const chs = App.exam.challenges.map((id) => CHALLENGES.find((c) => c.id === id)).filter(Boolean);
+  const parts = chs.map((ch, k) => {
+    const slot = examSlot(ch.id), program = slot.checks ? slot.bestProgram : null;
+    let res = null;
+    try { if (program) res = ch.quiz ? gradeQuiz(ch, program.answers || []) : evaluateChallenge(ch, programFromState(program)); } catch (e) { console.error(e); }
+    return practicePart(ch, res, program, k);
+  });
+  return { html: `<div class="fb">${parts.map((p) => p.html).join('')}</div>`, render(root) {
+    root.querySelectorAll('[data-fbq]').forEach((div) => { const [k, i] = div.dataset.fbq.split(':').map(Number); const w = renderProgramInto(div, chs[k].questions[i].code); if (w) feedbackWs.push(w); });
+    root.querySelectorAll('[data-fbsol]').forEach((div) => { const w = renderProgramInto(div, chs[Number(div.dataset.fbsol)].solution); if (w) feedbackWs.push(w); });
+  } };
 }
 const fmtHalf = (x) => (Math.round(x * 2) / 2).toString();
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
@@ -421,7 +425,7 @@ function showExamEnd(handedIn) {
   if (App.exam.practice) {
     // the blank test: the student sees their result (score of each part and the grade)
     const res = { challenges: Object.fromEntries(App.exam.challenges.filter((id) => examSlot(id).checks).map((id) => [id, { score: examSlot(id).best || 0, program: examSlot(id).bestProgram }])) };
-    const sheet = markSheet(App.exam.challenges, res);
+    const sheet = markSheet(App.exam.challenges, res), report = practiceReport();
     const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
     const prow = App.exam.challenges.map((id) => {
       const its = sheet.items.filter((it) => it.chId === id);
@@ -429,13 +433,17 @@ function showExamEnd(handedIn) {
       return `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? `${fm(got)} / ${fm(max)}` : `— / ${fm(max)} (nothing submitted)`}</b></td></tr>`;
     }).join('');
     $('examOverlayBody').innerHTML = `<div class="ov-icon">🧪</div><h1>Blank test: your result</h1><table class="exam-res">${prow}<tr><td><b>Total</b></td><td><b>${fm(sheet.total)} / ${fm(sheet.max)} marks (${sheet.pct} %)</b></td></tr></table>
-      <p class="muted">This was a practice test. In the real test, your teacher gives you the password.</p><button class="primary" id="blankHome">🏠 Back to the home page</button>`;
+      <p class="muted">This was a practice test. In the real test, your teacher gives you the password.</p>
+      <h2 class="fb-title">✏️ Correction</h2>${report.html}<button class="primary" id="blankHome">🏠 Back to the home page</button>`;
+    $('examOverlayBody').classList.add('ov-report');
     $('examOverlay').hidden = false;
+    report.render($('examOverlayBody'));
     $('blankHome').onclick = goHome;
     renderStepBar();
     updateExamBanner();
     return;
   }
+  $('examOverlayBody').classList.remove('ov-report');
   const rows = App.exam.challenges.map((id) => `<tr><td>${esc(chTitle(id))}</td><td><b>${examSlot(id).checks ? '✓ submitted' : '—'}</b></td></tr>`).join('');
   $('examOverlayBody').innerHTML = handedIn
     ? `<div class="ov-icon">✅</div><h1>Test submitted</h1><table class="exam-res">${rows}</table><p class="muted">Well done! Your teacher has your work. Wait quietly until the end of the test.</p>`

@@ -75,7 +75,8 @@ function evaluateChallenge(ch, prog) {
   // Event challenges: a forever loop that shows things by itself (without the button or the shake) is not an answer
   const quiet = !ch.quietCheck || ch.quietCheck((seed = 1) => new Tester(prog, seed));
   for (const test of ch.tests) {
-    if (!quiet && !test.always) { criteria.push({ label: test.label, points: 0, max: test.points, ok: false }); continue; }
+    // shows things without waiting for the event: 0, or a part (quietPart) when the right thing is shown all the time
+    if (!quiet && !test.always && !ch.quietPart) { criteria.push({ label: test.label, points: 0, max: test.points, ok: false }); continue; }
     let points = 0, detail = '';
     try {
       const r = test.run((seed = 1) => new Tester(prog, seed), prog);
@@ -85,6 +86,7 @@ function evaluateChallenge(ch, prog) {
     } catch (e) {
       detail = e.message;
     }
+    if (!quiet && !test.always) { points = Math.round(points * ch.quietPart); if (points) detail = (detail ? detail + ', ' : '') + 'half marks: it must wait for the button'; }
     criteria.push({ label: test.label + (detail ? ` (${detail})` : ''), points, max: test.points, ok: points === test.points });
   }
   if (ch.quietCheck) criteria.push({ label: ch.quietLabel, points: 0, max: 0, ok: quiet });

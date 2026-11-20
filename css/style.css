@@ -428,6 +428,13 @@ table.cls tr.grp td { font-size: 15px; }
 .overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(20, 30, 50, 0.82); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ov-box { background: #fff; border-radius: 22px; padding: 30px 40px; text-align: center; max-width: 560px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
 .ov-box h1 { margin: 6px 0; }
+/* the blank test: result and the correction of every part, scrolls */
+.ov-box.ov-report { max-width: 900px; width: 100%; max-height: calc(100vh - 40px); overflow-y: auto; }
+.ov-report .fb { text-align: left; }
+.ov-report .fb-title { margin: 22px 0 4px; }
+.fb-part { border-top: 2px solid var(--border); padding-top: 10px; margin-top: 14px; }
+.fb-part h3 { margin: 4px 0 6px; }
+.ov-report #blankHome { margin-top: 16px; }
 .ov-icon { font-size: 64px; }
 .exam-res { margin: 10px auto; border-collapse: collapse; }
 .exam-res td { padding: 5px 14px; border-bottom: 1px solid var(--border); text-align: left; }

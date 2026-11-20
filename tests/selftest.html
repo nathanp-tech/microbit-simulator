@@ -69,6 +69,10 @@
       if (!r.criteria[k]) { say(false, `${id} · ✗ ${title}: ${r.criteria[0].label}`); continue; }
       say(!r.criteria[k].ok, `${id} · ✗ ${title}: criterion "${r.criteria[k].label}" ${r.criteria[k].points}/${r.criteria[k].max} (total ${r.score} %)`);
     }
+    for (const [id, title, program, want] of (typeof SCORED !== 'undefined' ? SCORED : [])) {
+      const r = evaluateChallenge(CHALLENGES.find((c) => c.id === id), programFromState(program));
+      say(r.score === want, `${id} · ${title}: ${r.score} % (expected ${want} %)`);
+    }
     for (const [name, fn] of ENGINE_TESTS) {
       try { const r = fn(); say(r === true, `engine · ${name}${r === true ? '' : ': ' + r}`); } catch (err) { say(false, `engine · ${name}: ${err.message}`); }
     }

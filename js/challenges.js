@@ -110,11 +110,22 @@ function reactionRound(T, reaction) {
   return { heart: th - t0, numbers: T.numbers(t1), sad: T.sawPattern(ICONS.Sad, t1) };
 }
 // Nothing new on the screen for 3 s while nobody presses or shakes (after a long enough start)
-const stillWithoutInput = (make) => { const T = make(5).wait(12000); const t0 = T.t; T.wait(3000); return !T.frames(t0).some((f) => f.t > t0); };
+const stillWithoutInput = (make) => {
+  const T = make(5).wait(12000); const t0 = T.t; T.wait(3000);
+  // a new picture, or a show block run again (a forever that shows the same number: the screen does not change)
+  return !T.frames(t0).some((f) => f.t > t0) && !T.log(t0).some((e) => e.t > t0 && e.kind !== 'clear');
+};
 const near = (nums, target, tol) => nums.some((n) => Math.abs(n - target) <= tol);
 // show icon pauses 600 ms: a program that sets start after the heart measures 600 ms less (both are right)
 const nearReaction = (nums, r) => near(nums, r + 50, 200) || near(nums, r - 550, 200); // +100 ms: B counts when it is released
 
+// a button of "Happy and sad": the right face → all; another picture (a face drawn with show leds…) → half; the other face → 0
+function faceRound(make, btn, face, other) {
+  const T = make().wait(6000); const t0 = T.t; T.click(btn).wait(1500);
+  if (T.sawPattern(other, t0)) return 0;
+  if (T.sawPattern(face, t0)) return 1;
+  return reacted(T, t0).length ? { part: 0.5, detail: 'not the right face' } : 0;
+}
 // Dice faces: one LED = one dot
 const DICE_FACES = ['..... ..... ..#.. ..... .....', '#.... ..... ..... ..... ....#', '#.... ..... ..#.. ..... ....#',
   '#...# ..... ..... ..... #...#', '#...# ..... ..#.. ..... #...#', '#...# ..... #...# ..... #...#'];
@@ -142,7 +153,10 @@ const QB = (() => {
       ifElse([[cmp(getv('choice'), 'EQ', num(0)), [blk('basic_show_icon', { ICON: 'SmallSquare' })]], [cmp(getv('choice'), 'EQ', num(1)), [blk('basic_show_icon', { ICON: 'Square' })]]], [blk('basic_show_icon', { ICON: 'Scissors' })])) })),
     solSound: prog(blk('input_on_button', { BUTTON: 'A' }, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: sensor('input_sound_level') })) })),
     wrongButton: prog(blk('input_on_button', { BUTTON: 'B' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Heart' })) })),
-    lightMeter: prog(blk('basic_forever', {}, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: sensor('input_light_level') })) })),
+    // day / night with two separate if blocks: between 50 and 200 neither is true, the screen keeps what it showed
+    dayNight: prog(blk('basic_forever', {}, { HANDLER: seq(
+      ifElse([[cmp(sensor('input_light_level'), 'GT', num(200)), [str('DAY')]]]),
+      ifElse([[cmp(sensor('input_light_level'), 'LT', num(50)), [str('NIGHT')]]])) })),
     shakeReset: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('count') }, { VALUE: num(0) }), blk('variables_change', { VAR: V('count') }, { VALUE: num(1) }), blk('basic_show_number', {}, { NUMBER: getv('count') })) })),
     minusBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('lives') }, { VALUE: num(10) }), blk('variables_change', { VAR: V('lives') }, { VALUE: num(-3) }), blk('basic_show_number', {}, { NUMBER: getv('lives') })) })),
     changeBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('score') }, { VALUE: num(3) }), blk('variables_change', { VAR: V('score') }, { VALUE: num(2) }), blk('basic_show_number', {}, { NUMBER: getv('score') })) })),
@@ -176,9 +190,9 @@ const CHALLENGES = [
     questions: [
       { marks: 3, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', why: "Outputs show or play something: the LED screen and the speaker. Button A, the light sensor, the compass and the accelerometer are inputs (they measure or detect).", multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
       { marks: 1, open: true, q: 'You want the micro:bit to show where North is. Which sensor do you use?', accept: ['compass', 'magnetometer', 'compass heading'], model: 'the compass', why: "The compass (compass heading block) measures the direction: 0° is North." },
-      { marks: 1, open: true, q: 'Name one INPUT of the micro:bit (a button or a sensor).', why: "Inputs: buttons A and B, the logo, light level, temperature, compass, accelerometer (shake, tilt), microphone (sound level), pins.", accept: ['button', 'light', 'temperature', 'thermometer', 'compass', 'accelerometer', 'shake', 'tilt', 'microphone', 'sound', 'noise', 'logo', 'touch', 'pin', 'sensor', 'gesture', 'magnet', 'input'], reject: ['led', 'leds', 'screen', 'speaker', 'output'], model: 'a button, light level, temperature, compass, accelerometer (shake), microphone (sound), logo, pins' },
+      { marks: 1, open: true, q: 'Name one INPUT of the micro:bit.', why: "Inputs: buttons A and B, the logo, light level, temperature, compass, accelerometer (shake, tilt), microphone (sound level), pins.", accept: ['button', 'light', 'temperature', 'thermometer', 'compass', 'accelerometer', 'shake', 'tilt', 'microphone', 'sound', 'noise', 'logo', 'touch', 'pin', 'sensor', 'gesture', 'magnet', 'input'], reject: ['led', 'leds', 'screen', 'speaker', 'output'], model: 'a button, light level, temperature, compass, accelerometer (shake), microphone (sound), logo, pins' },
       { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', why: "The event block says button B: choose A with the little arrow.", code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
-      { marks: 2, q: 'This program shows the light level. How can you make it show 0?', why: "The light sensor is in the LED screen: cover it with your hand and the light level goes down to 0.", code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
+      { marks: 2, q: 'What does this program show when the light level is 120?', why: "120 > 200 is false and 120 < 50 is false: no show block runs, so nothing is shown. DAY is only above 200, NIGHT only below 50.", code: QB.dayNight, options: ['Nothing: no condition is true at 120', 'DAY, because 120 is more than 50', 'NIGHT, again and again', 'DAY and NIGHT, one after the other'], answer: 0 },
       { marks: 2, open: true, q: 'What number does this program show? Type the number.', code: QB.changeBy, why: "score starts at 3, then \"change score by 2\" adds 2: 3 + 2 = 5.", accept: ['5', 'five'], reject: ['32'], model: '5' },
     ],
   },
@@ -190,11 +204,11 @@ const CHALLENGES = [
     hints: ['Find "on button A pressed" in Input. Change A to B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
     tests: [
-      { label: 'Button A shows the happy face', points: 40, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('A').wait(1500); return T.sawPattern(ICONS.Happy, t0) && !T.sawPattern(ICONS.Sad, t0); } },
-      { label: 'Button B shows the sad face', points: 40, run: (make) => { const T = make().wait(6000); const t0 = T.t; T.click('B').wait(1500); return T.sawPattern(ICONS.Sad, t0) && !T.sawPattern(ICONS.Happy, t0); } },
+      { label: 'Button A shows the happy face', points: 40, run: (make) => faceRound(make, 'A', ICONS.Happy, ICONS.Sad) },
+      { label: 'Button B shows the sad face', points: 40, run: (make) => faceRound(make, 'B', ICONS.Sad, ICONS.Happy) },
       { label: 'The buttons work again and again', points: 20, run: (make) => {
         const T = make().wait(6000); T.click('A', 1200); T.click('B', 1200); const t0 = T.t; T.click('A').wait(1500);
-        return T.sawPattern(ICONS.Happy, t0);
+        return T.screen() === patternKey(ICONS.Happy); // after A, B, A: the happy face is on the screen
       } },
     ],
   },
@@ -206,7 +220,7 @@ const CHALLENGES = [
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
-      const shakes = (make) => { const T = make(11).wait(3000); const out = []; for (let i = 0; i < 45; i++) { const t0 = T.t; T.shake(1500); const r = reacted(T, t0); out.push(r.length ? r[r.length - 1] : null); } return out; };
+      const shakes = (make) => { const T = make(11).wait(3000); const out = []; for (let i = 0; i < 45; i++) { const t0 = T.t; T.shake(1500); const r = reacted(T, t0).filter((x) => !/^text:-?\d+(\.\d+)?$/.test(x)); out.push(r.length ? r[r.length - 1] : null); } return out; }; // a number (show number choice) is not a picture
       return [
         { label: 'A picture appears after every shake', points: 30, run: (make) => { const s = shakes(make); return s.filter(Boolean).length / s.length >= 0.95 ? 1 : 0.5 * s.filter(Boolean).length / s.length; } },
         { label: 'Three different pictures can appear (rock, paper, scissors)', points: 40, run: (make) => { const d = distinct(shakes(make).filter(Boolean)).length; return d === 3 ? 1 : d === 2 ? 0.4 : d > 3 ? 0.5 : 0; } },
@@ -220,7 +234,7 @@ const CHALLENGES = [
     description: '<ul class="steps"><li>Press [[btn:A]] → show the <b>sound level</b> (from 0 = silent to 255 = very loud)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>sound bar</b> (right of the LEDs) up or down, then press A.</p>',
     skills: 'on button A pressed, sound level, show number',
     hints: ['Put "show number" inside "on button A pressed".', 'Drag "sound level" (Input) into the show number block.'],
-    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed', quietPart: 0.5,
     tests: [
       { label: 'A shows the sound level (quiet: 40)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(40); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(40); } },
       { label: 'A shows the sound level (loud: 180)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(180); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(180); } },
@@ -245,7 +259,7 @@ const CHALLENGES = [
     description: '<ul class="steps"><li>Press [[btn:B]] → show the <b>temperature</b> (°C)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>thermometer</b> on the board, then press B.</p>',
     skills: 'on button B pressed, temperature, show number',
     hints: ['Put "show number" inside "on button B pressed".', 'Drag "temperature (°C)" (Input) into the show number block.'],
-    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed', quietPart: 0.5,
     tests: [
       { label: 'B shows the temperature (18 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(18); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(18); } },
       { label: 'B shows the temperature (31 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(31); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(31); } },
@@ -277,7 +291,7 @@ const CHALLENGES = [
       { label: 'Light 90 shows 2', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(90)) === '2' },
       { label: 'Light 160 shows 3', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(160)) === '3' },
       { label: 'Light 240 shows 4', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(240)) === '4' },
-      { label: 'Light 40 shows 1', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(40)) === '1' },
+      { label: 'Right at the limits (63 → 1, 64 → 2, 191 → 3, 192 → 4)', points: 20, run: (make) => [[63, '1'], [64, '2'], [191, '3'], [192, '4']].filter(([v, n]) => sensorRound(make, (T) => T.setLight(v)) === n).length / 4 },
     ],
   },
 ];
