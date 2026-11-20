@@ -720,7 +720,7 @@ function renderWatchQuiz(ch, entry) {
   const answers = (entry && entry.answers) || [];
   const res = gradeQuiz(ch, answers);
   box.innerHTML = `<h3 style="margin-top:0">❓ ${esc(ch.title)} · ${answers.filter((a) => a !== null && a !== undefined).length} / ${ch.questions.length} answered · ${res.score} % right</h3>`
-    + ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => { const p = quizPicked(q, answers[i], k), r = quizRight(q, k); return `<div class="wq-opt${r ? ' right' : ''}${p ? (r ? ' picked-ok' : ' picked-ko') : ''}">${p ? (r ? '✔' : '✖') : r ? '○' : '·'} ${esc(o)}</div>`; }).join('')}</div>`).join('');
+    + ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)}${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.open ? openAnswerHtml(q, answers[i]) : q.options.map((o, k) => { const p = quizPicked(q, answers[i], k), r = quizRight(q, k); return `<div class="wq-opt${r ? ' right' : ''}${p ? (r ? ' picked-ok' : ' picked-ko') : ''}">${p ? (r ? '✔' : '✖') : r ? '○' : '·'} ${esc(o)}</div>`; }).join('')}</div>`).join('');
   renderQuizCode(box, ch.questions);
   W.mb = null;
   $('wResult').textContent = entry && nb(entry.bestScore) !== null ? `Best check: ${nb(entry.bestScore)} %` : '';

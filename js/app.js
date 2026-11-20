@@ -900,9 +900,14 @@ function showQuiz(slot) {
     const mark = marks && picked ? (marks[i] ? ' right' : ' wrong') : '';
     return `<label class="${picked ? 'picked' : ''}${mark}"><input type="${q.multi ? 'checkbox' : 'radio'}" name="q${i}" value="${k}"${picked ? ' checked' : ''}${locked ? ' disabled' : ''}> ${esc(o)}</label>`;
   };
+  const openInput = (q, i) => {
+    const v = typeof answers[i] === 'string' ? answers[i] : '';
+    const mark = marks && v ? (marks[i] ? ' right' : ' wrong') : '';
+    return `<input type="text" class="q-open${mark}" data-q="${i}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Type your answer…" value="${esc(v)}"${locked ? ' disabled' : ''}>`;
+  };
   $('quizView').innerHTML = `<div class="mc-quiz-card"><h2>❓ ${esc(ch.title)} <span class="q-marks">· ${chMarks(ch)} marks</span></h2><p class="muted">${ch.description}</p>
-    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="q-marks">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
-    <div style="text-align:right;margin-top:10px">${locked ? '' : App.exam ? `<span class="muted">💾 Your answers are saved as you click. You can come back and change them until the end.</span> <button class="mc-btn green" id="quizCheck">Next ›</button>` : '<button class="mc-btn green" id="quizCheck">✅ Check my answers</button>'}</div></div>`;
+    ${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="q-marks">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-q="${i}"></div>` : ''}${q.open ? openInput(q, i) : q.options.map((o, k) => option(q, i, o, k)).join('')}</div>`).join('')}
+    <div style="text-align:right;margin-top:10px">${locked ? '' : App.exam ? `<span class="muted">💾 Your answers are saved as you go. You can come back and change them until the end.</span> <button class="mc-btn green" id="quizCheck">Next ›</button>` : '<button class="mc-btn green" id="quizCheck">✅ Check my answers</button>'}</div></div>`;
   renderQuizCode($('quizView'), ch.questions);
   $('quizView').querySelectorAll('input[type=radio], input[type=checkbox]').forEach((r) => {
     r.onchange = () => {
@@ -919,6 +924,20 @@ function showQuiz(slot) {
       // only the labels change (the blocks of the questions stay drawn)
       $('quizView').querySelectorAll(`input[name="q${i}"]`).forEach((x) => { x.parentElement.className = x.checked ? 'picked' : ''; });
     };
+  });
+  $('quizView').querySelectorAll('input.q-open').forEach((inp) => {
+    inp.oninput = () => {
+      const s = workSlot();
+      if (!s) return;
+      s.answers = s.answers || [];
+      s.answers[Number(inp.dataset.q)] = inp.value.slice(0, 80);
+      s.quizMarks = null;
+      s.programAt = new Date().toISOString();
+      inp.classList.remove('right', 'wrong');
+      Progress.persist();
+      if (App.exam && !CR.examOver) autoSendQuiz();
+    };
+    inp.onkeydown = (e) => { if (e.key === 'Enter') inp.blur(); };
   });
   if ($('quizCheck')) $('quizCheck').onclick = evaluate;
 }

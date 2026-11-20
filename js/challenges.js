@@ -62,7 +62,29 @@ function renderQuizCode(root, questions) {
 // The answer of one question, as HTML (the student's choice or the right answer)
 const quizPicked = (q, given, k) => (q.multi ? Array.isArray(given) && given.includes(k) : given === k);
 const quizRight = (q, k) => (q.multi ? q.answer.includes(k) : q.answer === k);
-const quizAnswered = (q, given) => (q.multi ? Array.isArray(given) && given.length > 0 : given !== undefined && given !== null);
+const quizAnswered = (q, given) => (q.open ? typeof given === 'string' && given.trim() !== '' : q.multi ? Array.isArray(given) && given.length > 0 : given !== undefined && given !== null);
+// Open questions (the student types the answer): right when a word of "accept" is in it (any case, accents, plural, one typo
+// in a long word), unless a word of "reject" is in it too.
+const openNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function nearWord(a, b) {
+  if (a === b || a === b + 's' || a + 's' === b || a === b + 'es') return true;
+  if (b.length < 5 || Math.abs(a.length - b.length) > 1) return false;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length] <= 1;
+}
+function openHas(text, key) {
+  const w = openNorm(text).split(' '), k = openNorm(key).split(' ');
+  for (let i = 0; i + k.length <= w.length; i++) if (k.every((x, j) => nearWord(w[i + j], x))) return true;
+  return false;
+}
+// how an open question looks in the teacher's views: the typed answer (✔ / ✖) and what is accepted
+function openAnswerHtml(q, given, withKey = true) {
+  const has = typeof given === 'string' && given.trim() !== '', ok = has && openRight(q, given);
+  return `${has ? `<div class="wq-opt ${ok ? 'picked-ok' : 'picked-ko'}">${ok ? '✔' : '✖'} “${esc(given)}”</div>` : '<div class="wq-opt muted">no answer</div>'}${withKey ? `<div class="wq-opt right">○ Accepted: ${esc(q.model || q.accept.join(', '))}</div>` : ''}`;
+}
+const openRight = (q, given) => typeof given === 'string' && !(q.reject || []).some((r) => openHas(given, r)) && q.accept.some((a) => openHas(given, a));
 const categoryOf = (ch) => CATEGORIES.find((c) => c.id === ch.cat) || CATEGORIES[0];
 
 // ---------- helpers for the tests ----------
@@ -115,15 +137,16 @@ const QB = (() => {
   };
   const str = (t) => blk('basic_show_string', {}, { TEXT: txt(t) });
   return {
+    solFaces: prog(blk('input_on_button', { BUTTON: 'A' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Happy' })) }), blk('input_on_button', { BUTTON: 'B' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Sad' })) })),
+    solRps: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('choice') }, { VALUE: { block: blk('math_random', {}, { FROM: num(0), TO: num(2) }) } }),
+      ifElse([[cmp(getv('choice'), 'EQ', num(0)), [blk('basic_show_icon', { ICON: 'SmallSquare' })]], [cmp(getv('choice'), 'EQ', num(1)), [blk('basic_show_icon', { ICON: 'Square' })]]], [blk('basic_show_icon', { ICON: 'Scissors' })])) })),
+    solSound: prog(blk('input_on_button', { BUTTON: 'A' }, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: sensor('input_sound_level') })) })),
     wrongButton: prog(blk('input_on_button', { BUTTON: 'B' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Heart' })) })),
     lightMeter: prog(blk('basic_forever', {}, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: sensor('input_light_level') })) })),
     shakeReset: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('count') }, { VALUE: num(0) }), blk('variables_change', { VAR: V('count') }, { VALUE: num(1) }), blk('basic_show_number', {}, { NUMBER: getv('count') })) })),
+    minusBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('lives') }, { VALUE: num(10) }), blk('variables_change', { VAR: V('lives') }, { VALUE: num(-3) }), blk('basic_show_number', {}, { NUMBER: getv('lives') })) })),
     changeBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('score') }, { VALUE: num(3) }), blk('variables_change', { VAR: V('score') }, { VALUE: num(2) }), blk('basic_show_number', {}, { NUMBER: getv('score') })) })),
-    wrongCompass: prog(blk('basic_forever', {}, { HANDLER: seq(ifElse([
-      [cmp(sensor('input_compass'), 'LT', num(45)), [str('N')]],
-      [cmp(sensor('input_compass'), 'LT', num(135)), [str('W')]],
-      [cmp(sensor('input_compass'), 'LT', num(225)), [str('S')]],
-      [cmp(sensor('input_compass'), 'LT', num(315)), [str('E')]]], [str('N')])) })),
+    wrongCompass: prog(blk('basic_forever', {}, { HANDLER: seq(ifElse([[cmp(sensor('input_compass'), 'LT', num(180)), [str('W')]]], [str('E')])) })),
   };
 })();
 // what a "forever" program shows last once a sensor is set (compass letter, light level…)
@@ -138,19 +161,20 @@ const CHALLENGES = [
   // ---------------- 🧪 Blank test ----------------
   {
     id: 'quiz-blank', cat: 'blank', level: 2, title: 'Quiz (blank test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
+    description: 'Six questions. Some show a program in blocks; for some you type a short answer. Your answers are saved as you go: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
-      { marks: 3, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
-      { marks: 1, q: 'Is button A an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
-      { marks: 1, q: 'Is the LED screen of the micro:bit an INPUT?', options: ['No, never', 'Yes: the LEDs also measure the light level', 'Yes: it detects the buttons', 'Only when it is off'], answer: 1 },
-      { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
-      { marks: 2, q: 'This program shows the light level. How can you make it show 0?', code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
-      { marks: 2, q: 'What does this program show?', code: QB.changeBy, options: ['2', '3', '5', '32'], answer: 2 },
+      { marks: 3, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', why: "Outputs show or play something: the LED screen and the speaker. Button A, the light sensor, the compass and the accelerometer are inputs (they measure or detect).", multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
+      { marks: 1, open: true, q: 'Button A: is it an input or an output? Type one word.', why: "You press it: it gives information TO the micro:bit, so it is an input.", accept: ['input'], reject: ['output'], model: 'input' },
+      { marks: 1, open: true, q: 'Name one INPUT of the micro:bit (a button or a sensor).', why: "Inputs: buttons A and B, the logo, light level, temperature, compass, accelerometer (shake, tilt), microphone (sound level), pins.", accept: ['button', 'light', 'temperature', 'thermometer', 'compass', 'accelerometer', 'shake', 'tilt', 'microphone', 'sound', 'noise', 'logo', 'touch', 'pin', 'sensor', 'gesture', 'magnet', 'input'], reject: ['led', 'leds', 'screen', 'speaker', 'output'], model: 'a button, light level, temperature, compass, accelerometer (shake), microphone (sound), logo, pins' },
+      { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', why: "The event block says button B: choose A with the little arrow.", code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
+      { marks: 2, q: 'This program shows the light level. How can you make it show 0?', why: "The light sensor is in the LED screen: cover it with your hand and the light level goes down to 0.", code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
+      { marks: 2, open: true, q: 'What number does this program show? Type the number.', code: QB.changeBy, why: "score starts at 3, then \"change score by 2\" adds 2: 3 + 2 = 5.", accept: ['5', 'five'], reject: ['32'], model: '5' },
     ],
   },
   {
     id: 'faces', marks: 4, cat: 'blank', level: 1, title: 'Happy and sad', lesson: 'Unit 1',
+    solution: QB.solFaces, solutionNote: 'Two events, one for each button, each with a show icon.',
     description: '<ul class="steps"><li>Press [[btn:A]] → a happy face [[icon:Happy]]</li><li>Press [[btn:B]] → a sad face [[icon:Sad]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click A, then B on the board.</p>',
     skills: 'on button A / B pressed, show icon',
     hints: ['Find "on button A pressed" in Input. Change A to B with the little arrow.', 'Put a "show icon" inside each button block and choose the face.'],
@@ -166,6 +190,7 @@ const CHALLENGES = [
   },
   {
     id: 'rps', marks: 6, cat: 'blank', level: 2, title: 'Rock Paper Scissors', lesson: 'Unit 2',
+    solution: QB.solRps, solutionNote: 'On shake: a variable gets a random number 0, 1 or 2, then if / else if / else shows a different picture for each number.',
     description: '<ul class="steps"><li>[[shake]] → show <b>rock</b>, <b>paper</b> or <b>scissors</b> at random on the LED screen, for example [[icon:SmallSquare]] [[icon:Square]] [[icon:Scissors]]</li></ul><p class="test-it">🧪 <b>Test it:</b> click <b>SHAKE</b> 10 times: do all three appear?</p>',
     skills: 'variables, pick random, if / else if',
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
@@ -181,6 +206,7 @@ const CHALLENGES = [
   },
   {
     id: 'sound-a', marks: 4, cat: 'blank', level: 1, title: 'Sound meter', lesson: 'Unit 3',
+    solution: QB.solSound, solutionNote: 'On button A: show number with the sound level block inside.',
     description: '<ul class="steps"><li>Press [[btn:A]] → show the <b>sound level</b> (from 0 = silent to 255 = very loud)</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the <b>sound bar</b> (right of the LEDs) up or down, then press A.</p>',
     skills: 'on button A pressed, sound level, show number',
     hints: ['Put "show number" inside "on button A pressed".', 'Drag "sound level" (Input) into the show number block.'],
@@ -193,15 +219,15 @@ const CHALLENGES = [
   // ---------------- 📝 Test ----------------
   {
     id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks. Your answers are saved as you click: you can come back and change them until the end.',
+    description: 'Six questions. Some show a program in blocks; for some you type a short answer. Your answers are saved as you go: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
       { marks: 2, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
-      { marks: 1, q: 'Is the LED screen an output?', options: ['Yes: it shows pictures, numbers and text', 'No: it is only an input', 'No: it is a sensor', 'Only with the radio'], answer: 0 },
-      { marks: 2, q: 'What is a variable?', options: ['A box with a name that keeps a value; the value can change', 'A block that repeats forever', 'A sensor of the micro:bit', 'A picture on the LED screen'], answer: 0 },
+      { marks: 1, open: true, q: 'Name one OUTPUT of the micro:bit.', accept: ['led', 'leds', 'screen', 'display', 'speaker', 'sound', 'music', 'melody', 'tone', 'buzzer', 'pin', 'radio', 'output'], reject: ['button', 'sensor', 'compass', 'temperature', 'thermometer', 'accelerometer', 'microphone', 'light level', 'input'], model: 'the LED screen, the speaker (music), the pins, the radio' },
+      { marks: 2, open: true, q: 'What number does this program show? Type the number.', code: QB.minusBy, accept: ['7', 'seven'], reject: ['13'], model: '7' },
       { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
-      { marks: 2, q: 'This compass shows the wrong letter when you face East or West. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Swap the letters N and S', 'Change 45 to 90', 'Use the temperature instead of the compass heading'], answer: 0 },
-      { marks: 1, q: 'Is the temperature sensor an input or an output?', options: ['An input', 'An output', 'Both', 'Neither'], answer: 0 },
+      { marks: 2, q: 'This program should show E when the micro:bit faces East (90°) and W when it faces West (270°). It always shows the wrong letter. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Change 180 to 360', 'Add a pause in the forever block', 'Use the temperature instead of the compass heading'], answer: 0 },
+      { marks: 1, open: true, q: 'The temperature sensor: is it an input or an output? Type one word.', accept: ['input'], reject: ['output'], model: 'input' },
     ],
   },
   {

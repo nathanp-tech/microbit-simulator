@@ -33,10 +33,24 @@
     const t0 = performance.now();
     for (const ch of CHALLENGES) {
       if (ch.quiz) {
-        const r = gradeQuiz(ch, ch.questions.map((q) => q.answer));
+        const r = gradeQuiz(ch, ch.questions.map((q) => (q.open ? q.accept[0] : q.answer)));
         say(r.score === 100, `${ch.id}: right answers → ${r.score} %`);
-        const w = gradeQuiz(ch, ch.questions.map((q) => (q.answer + 1) % q.options.length));
+        const w = gradeQuiz(ch, ch.questions.map((q) => (q.open ? (q.reject || ['banana'])[0] : q.multi ? q.options.map((o, k) => k).filter((k) => !q.answer.includes(k)) : (q.answer + 1) % q.options.length)));
         say(w.score === 0, `${ch.id}: wrong answers → ${w.score} %`);
+        // open questions: typed answers, flexible
+        const OPEN = [[/Button A: is it/, ['Input', 'an input', 'INPUT.', 'imput', 'inputs'], ['output', 'an output', 'both input and output', 'a button', '']],
+          [/one INPUT/, ['button A', 'the light sensor', 'Température', 'acelerometer', 'the compass', 'Microphone', 'shake'], ['LED', 'the screen', 'speaker', 'banana']],
+          [/one OUTPUT/, ['LED screen', 'the leds', 'Speaker', 'sound', 'music', 'display'], ['button', 'the light level', 'temperature sensor', 'compass', 'banana']],
+          [/temperature sensor: is it/, ['input', 'Input!'], ['output', 'outpt', 'input and output']],
+          [/What number/, null, null]];
+        ch.questions.forEach((q) => {
+          if (!q.open) return;
+          const t = OPEN.find(([re]) => re.test(q.q));
+          if (!t) { say(false, `${ch.id}: open question without a test: ${q.q}`); return; }
+          const good = t[1] || [q.model, ' ' + q.model + ' ', q.accept[1]], bad = t[2] || ['3', '32', '13', '2', 'banana'];
+          for (const g of good) say(openRight(q, g), `${ch.id}: “${q.q.slice(0, 32)}…” accepts “${g}”`);
+          for (const b of bad) say(!openRight(q, b), `${ch.id}: “${q.q.slice(0, 32)}…” refuses “${b}”`);
+        });
         continue;
       }
       const sols = SOLUTIONS[ch.id];

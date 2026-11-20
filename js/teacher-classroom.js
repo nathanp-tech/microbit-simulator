@@ -158,7 +158,7 @@ function examPreview(id, back) {
     if (!ch) return '';
     if (!ch.quiz) return `<div class="pv-part"><h3>${n}. ${esc(ch.title)} <span class="muted">· ${chMarks(ch)} marks</span></h3><div class="review-mission">${richDesc(ch.description)}</div>
       <p class="muted">Checked automatically: ${(ch.tests || []).map((t) => `${esc(t.label)} (${t.points} %)`).join(' · ')}</p></div>`;
-    return `<div class="pv-part"><h3>${n}. ${esc(ch.title)} <span class="muted">· ${chMarks(ch)} marks</span></h3>${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="muted">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-pv="${esc(cid)}:${i}"></div>` : ''}${q.options.map((o, k) => `<div class="wq-opt${quizRight(q, k) ? ' right' : ''}">${quizRight(q, k) ? '✔' : '·'} ${esc(o)}</div>`).join('')}</div>`).join('')}</div>`;
+    return `<div class="pv-part"><h3>${n}. ${esc(ch.title)} <span class="muted">· ${chMarks(ch)} marks</span></h3>${ch.questions.map((q, i) => `<div class="mc-q"><p>${i + 1}. ${esc(q.q)} <span class="muted">[${q.marks || 1} mark${(q.marks || 1) > 1 ? 's' : ''}]</span>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-pv="${esc(cid)}:${i}"></div>` : ''}${q.open ? `<div class="wq-opt right">✍ Typed answer · accepted: ${esc(q.model || q.accept.join(', '))}</div>` : q.options.map((o, k) => `<div class="wq-opt${quizRight(q, k) ? ' right' : ''}">${quizRight(q, k) ? '✔' : '·'} ${esc(o)}</div>`).join('')}</div>`).join('')}</div>`;
   };
   openModal(`<div class="actions"><button id="pvBack">← Back</button></div>
     <h2>👁 ${esc(x.title)} <span class="muted">· ${x.minutes} min · ${max} marks</span></h2><p class="muted">${esc(x.note || '')}</p>
@@ -380,7 +380,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
       return `<section class="ev-sec" id="ev-${i}">${head}${c ? '' : '<p class="muted">No answers sent.</p>'}${ch.questions.map((q, k) => {
         const it = sheet.items.find((x) => x.key === `${cid}#${k}`);
         return `<div class="ev-q"><p><b>${k + 1}. ${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-evq="${esc(cid)}:${k}"></div>` : ''}
-          ${q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
+          ${q.open ? openAnswerHtml(q, answers[k]) : q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
           ${markRow(it)}</div>`;
       }).join('')}</section>`;
     }
@@ -477,13 +477,14 @@ function renderReview(k) {
   const ch = CHALLENGES.find((c) => c.id === it.chId), q = ch && ch.quiz ? ch.questions[it.q] : null;
   const rows = examRows().filter(({ r }) => !r.missing);
   const head = q
-    ? `<p><b>${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? '<div class="q-code" data-q="0"></div>' : ''}<p class="muted">Right answer: ${q.options.filter((o, i) => quizRight(q, i)).map(esc).join(' · ')}</p>`
+    ? `<p><b>${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? '<div class="q-code" data-q="0"></div>' : ''}<p class="muted">Right answer: ${q.open ? esc(q.model || q.accept.join(', ')) + ' (typed: check the answers marked ✖, a right idea may be written differently)' : q.options.filter((o, i) => quizRight(q, i)).map(esc).join(' · ')}</p>`
     : `<div class="review-mission">${ch ? richDesc(ch.description) : esc(it.chId)}</div>`;
   const answer = (r, sheetItem) => {
     const c = (r.challenges || {})[it.chId];
     if (!c) return '<span class="muted">nothing submitted</span>';
     if (q) {
       const given = ((c.program && c.program.answers) || [])[it.q];
+      if (q.open) return openAnswerHtml(q, given, false);
       const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
       return picked || '<span class="muted">no answer</span>';
     }

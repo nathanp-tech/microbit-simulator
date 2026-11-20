@@ -199,6 +199,10 @@ div.blocklyTreeSeparator, .blocklyTreeSeparator { border-bottom: 1px solid #ccc 
 .mc-q label.picked { border-color: var(--mc-blue); background: #eef2ff; }
 .mc-q label.right { border-color: #107c10; background: #e9f6e9; }
 .mc-q label.wrong { border-color: #c4262e; background: #fdecee; }
+.mc-q input.q-open { display: block; width: min(420px, 100%); box-sizing: border-box; padding: 9px 12px; margin: 6px 0; border: 2px solid #e6e6e6; border-radius: 8px; font-size: 15px; font-family: inherit; }
+.mc-q input.q-open:focus { outline: none; border-color: var(--mc-blue); background: #eef2ff; }
+.mc-q input.q-open.right { border-color: #107c10; background: #e9f6e9; }
+.mc-q input.q-open.wrong { border-color: #c4262e; background: #fdecee; }
 
 /* Home: challenge gallery */
 .mc-gallery h3 { margin: 16px 0 8px; }
@@ -394,3 +398,23 @@ body.quiz-mode #boards, body.quiz-mode #simToolbar, body.quiz-mode #showData, bo
 .mc-tut[data-unit="blank"] .mc-mission-label { color: #0f8a8c; }
 .mc-tut[data-unit="test"] .mc-mission-label { color: #6633cc; }
 .sb-m { font-size: 11px; font-weight: 700; color: #5b3cc4; background: #f1edff; border-radius: 8px; padding: 1px 6px; margin-left: 2px; white-space: nowrap; }
+
+/* Blank test: feedback and correction after each submit */
+.fb h2 { margin: 0 0 4px; }
+.fb .fb-total { color: var(--mc-blue, #3454d1); }
+.fb-q { border: 2px solid #e6e6e6; border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.fb-q.ok { border-color: #9fd59f; background: #f3fbf3; }
+.fb-q.part { border-color: #f2c66d; background: #fffaf0; }
+.fb-q.ko { border-color: #f0a3a8; background: #fff6f7; }
+.fb-q-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fb-m { white-space: nowrap; font-weight: 700; }
+.fb-line { margin-top: 4px; }
+.fb-right { color: #107c10; font-weight: 600; }
+.fb-why { margin-top: 6px; color: #444; font-size: 14px; }
+.fb-code { margin-top: 6px; }
+.fb-crit { list-style: none; padding: 0; margin: 10px 0; }
+.fb-crit li { padding: 6px 10px; border-radius: 8px; margin: 4px 0; }
+.fb-crit li.ok { background: #e9f6e9; } .fb-crit li.part { background: #fff4dc; } .fb-crit li.ko { background: #fdecee; }
+.fb-h { margin: 14px 0 6px; font-size: 16px; }
+.fb-sol { display: inline-block; border: 1px solid #e6e6e6; border-radius: 10px; background: #f7f8fa; }
+.fb-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; position: sticky; bottom: 0; background: #fff; padding-top: 8px; }

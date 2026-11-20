@@ -119,7 +119,8 @@ function gradeQuiz(ch, answers) {
       const g = Array.isArray(given) ? given : [];
       const hits = g.filter((k) => q.answer.includes(k)).length, wrong = g.length - hits;
       pts = Math.max(0, (hits - wrong) / q.answer.length);
-    } else pts = given === q.answer ? 1 : 0;
+    } else if (q.open) pts = openRight(q, given) ? 1 : 0;
+    else pts = given === q.answer ? 1 : 0;
     return { label: `${i + 1}. ${q.q}`, points: Math.round(pts * 100) / 100, max: 1, ok: pts === 1, given };
   });
   const pts = criteria.reduce((a, c) => a + c.points, 0);

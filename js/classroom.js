@@ -282,7 +282,7 @@ function renderExam() {
   $('btnHint').hidden = slot.hints >= hints.length;
   $('btnHint').textContent = `💡 Hint (${slot.hints + 1}/${hints.length})`;
   $('btnEvaluate').hidden = CR.examOver || !!ch.quiz;
-  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">💾 Your answers are saved as you click. You can come back to the quiz and change them until the end of the exam.</div>`
+  $('validateBox').innerHTML = ch.quiz ? `<div class="exam-best">💾 Your answers are saved as you go. You can come back to the quiz and change them until the end of the exam.</div>`
     : `<div class="exam-note">${slot.checks ? '✅ <b>Submitted.</b> Improved it? Test it, then submit again.' : 'Test it in the simulator. When it works, submit it.'}</div>`;
   updateButtons();
   renderStepBar();
@@ -308,6 +308,7 @@ function onExamGrade(res) {
   const order = App.exam.challenges, k = order.indexOf(id);
   const next = order.slice(k + 1).concat(order.slice(0, k)).find((c) => !examSlot(c).checks);
   const sent = ch.quiz ? '✅ Answers saved' : '📨 Program submitted';
+  if (App.exam.practice) return practiceFeedback(ch, res, program, next);  // the blank test: feedback and correction
   if (next) {
     enterExamChallenge(next);
     toast(`${sent}. Next: ${chTitle(next)}`, 4000);
@@ -318,6 +319,43 @@ function onExamGrade(res) {
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button onclick="closeModal()">Keep working</button><button class="primary" id="allDoneFinish">✅ Submit my test</button></div>`);
   $('allDoneFinish').onclick = () => { closeModal(); confirmFinishTest(); };
 }
+// Blank test: after each submit, the marks, what worked and the correction (a program that works, or the right answers)
+let feedbackWs = [];
+function practiceFeedback(ch, res, program, next) {
+  while (feedbackWs.length) { try { feedbackWs.pop().dispose(); } catch (e) { /* gone */ } }
+  const max = chMarks(ch);
+  let got, body;
+  if (ch.quiz) {
+    const answers = program.answers || [];
+    const marksOf = res.criteria.map((c, i) => halfMark(c.points * (ch.questions[i].marks || 1)));
+    got = marksOf.reduce((a, b) => a + b, 0);
+    body = ch.questions.map((q, i) => {
+      const m = q.marks || 1, ok = marksOf[i] === m, given = answers[i];
+      const yours = q.open ? (typeof given === 'string' && given.trim() ? `“${esc(given)}”` : '<i>no answer</i>')
+        : q.multi ? (Array.isArray(given) && given.length ? given.map((k) => esc(q.options[k])).join(' · ') : '<i>no answer</i>')
+        : given !== undefined && given !== null ? esc(q.options[given]) : '<i>no answer</i>';
+      const right = q.open ? esc(q.model || q.accept[0]) : q.multi ? q.answer.map((k) => esc(q.options[k])).join(' · ') : esc(q.options[q.answer]);
+      return `<div class="fb-q ${ok ? 'ok' : marksOf[i] > 0 ? 'part' : 'ko'}"><div class="fb-q-head"><b>${ok ? '✔' : marksOf[i] > 0 ? '◐' : '✖'} ${i + 1}. ${esc(q.q)}</b><span class="fb-m">${fmtHalf(marksOf[i])} / ${m}</span></div>
+        ${q.code ? `<div class="q-code fb-code" data-fbq="${i}"></div>` : ''}
+        <div class="fb-line">Your answer: ${yours}</div>${ok ? '' : `<div class="fb-line fb-right">Right answer: ${right}</div>`}${q.why ? `<div class="fb-why">💡 ${esc(q.why)}</div>` : ''}</div>`;
+    }).join('');
+  } else {
+    got = halfMark(res.score / 100 * max);
+    body = `<ul class="fb-crit">${res.criteria.map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>
+      ${ch.solution ? `<h3 class="fb-h">✏️ Correction: a program that works</h3><div class="fb-sol" id="fbSol"></div>${ch.solutionNote ? `<p class="fb-why">💡 ${esc(ch.solutionNote)}</p>` : ''}` : ''}`;
+  }
+  const full = got >= max;
+  openModal(`<div class="fb"><h2>${full ? '🎉' : got > 0 ? '👍' : '💪'} ${esc(ch.title)} · <span class="fb-total">${fmtHalf(got)} / ${max} marks</span></h2>
+    <p class="muted">${full ? 'Perfect!' : 'Look at the correction, then try again if you want: you can submit again (the last one counts).'}</p>
+    ${body}
+    <div class="fb-actions"><button id="fbStay">↺ Try again</button>${next ? `<button class="primary" id="fbNext">Next: ${esc(chTitle(next))} ›</button>` : '<button class="primary" id="fbDone">✅ Finish the blank test</button>'}</div></div>`);
+  $('modalBody').querySelectorAll('[data-fbq]').forEach((div) => { const w = renderProgramInto(div, ch.questions[Number(div.dataset.fbq)].code); if (w) feedbackWs.push(w); });
+  if (ch.solution && $('fbSol')) { const w = renderProgramInto($('fbSol'), ch.solution); if (w) feedbackWs.push(w); }
+  $('fbStay').onclick = () => { closeModal(); if (ch.quiz) showQuiz(examSlot(ch.id)); };
+  if (next) $('fbNext').onclick = () => { closeModal(); enterExamChallenge(next); };
+  else $('fbDone').onclick = () => { closeModal(); confirmFinishTest(); };
+}
+const fmtHalf = (x) => (Math.round(x * 2) / 2).toString();
 // Exam results wait in the saved work until the server has them (a check made while the network was down is sent later).
 function queueExamResult(r) {
   if (App.exam && App.exam.practice) return; // the blank test stays in the student's work
