@@ -71,6 +71,8 @@ How a check works: the program runs on a fresh simulated micro:bit, in virtual t
 
 **During the test:** after each *Submit my program* the student goes straight to the next challenge not submitted yet. *✅ Submit my test* (in the bar of steps) hands in the whole test: the latest programs are sent and the test cannot be opened again. When the time is over (or the teacher stops it), the test closes and cannot be opened again either. The live view shows in red a student who is **not on the test page** (other tab, other window, page closed), with how many times and how long; the results show the hand-in time and the same count (also in the CSV).
 
+**Corrections:** in the blank test, the student sees the marks and the full correction at the end (also after a blank exam started by the teacher: *✏️ See my correction*). For the real test, mark it first, then in the results click **🔗 Correction links**: a text to copy with one link per student (no password; each link opens only that student's correction: marks, grade out of 7 as in the table, right answers, their program and a program that works). Changed marks later? Click it again. *🚫 Close the corrections* stops the links.
+
 **Help queue:** first come, first served (oldest first, for the teacher and for the student who sees their place); asking again or reloading the page keeps the place in the queue.
 
 In an exam: the quiz answers are sent **once** and not marked on screen (no guessing by elimination); a student cannot leave the exam with *Exit*, and a name already open on another computer cannot be taken by a classmate (it frees itself 1 minute after that computer closes). A program that shows things by itself in a *forever* loop, without the button or the shake, scores 0 on the event challenges.

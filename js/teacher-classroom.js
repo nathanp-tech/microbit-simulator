@@ -288,6 +288,7 @@ function renderExamResults() {
       <div class="hist">${hist.map((n, i) => `<div class="hbar"><span class="hn">${n || ''}</span><div style="height:${Math.round(n / hmax * 60)}px"></div><b>${i + 1}</b></div>`).join('')}</div></div>
     <div class="actions"><button class="primary" id="exReview" title="Go through the questions one by one and change the marks">✏️ Mark question by question</button>
       <button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying</button>
+      <button id="exShare" title="Mark the test first. Then: a text to copy with the link of each student's correction (no password needed)">🔗 Correction links${e.shared ? ' ✓' : ''}</button>
       <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
     ${X.fromFile ? `<p class="warn-box">📂 Opened from the backup file <b>${esc(X.fromFile)}</b>: changing a mark needs the database.</p>` : ''}
     <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade<br><span class="muted">/7</span></th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
@@ -319,6 +320,7 @@ function renderExamResults() {
     a.click();
   };
   $('exVerify').onclick = verifyExam;
+  $('exShare').onclick = () => (X.fromFile ? alert('Opened from a backup file: the correction links need the database.') : shareCorrections());
   document.querySelectorAll('[data-exview]').forEach((b) => {
     b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); examViewer(sid, Math.max(0, e.challenges.indexOf(cid))); };
   });
@@ -339,6 +341,32 @@ function renderExamResults() {
   document.querySelectorAll('[data-exstudent]').forEach((b) => { b.onclick = () => examViewer(b.dataset.exstudent, 0); });
 }
 
+// The correction links: each student opens their own correction (marks, grade, right answers, a program that works).
+// The grades out of 7 are those of the table now: share again after changing marks.
+async function shareCorrections() {
+  const e = X.exam, rows = examRows().filter(({ r }) => r.studentId && !r.missing);
+  const grades = Object.fromEntries(rows.filter((x) => x.g7 !== undefined).map(({ r, g7 }) => [r.studentId, g7]));
+  if (!confirm(`Open the correction of "${e.title}" (${e.className}) to the students?\n\nEach student sees only their own marks, their grade (${rows.length ? 'as in this table now' : 'none yet'}), the right answers and a program that works.\nMark the test first. If you change marks later, click this button again.`)) return;
+  let d;
+  try { d = await tpost('api/exam', { action: 'share', examId: e.id, grades }); } catch (err) { alert(err.message); return; }
+  X.exam = d.exam;
+  const base = new URL('correction.html', location.href).href;
+  const links = d.links.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+  const text = `Correction of the test "${e.title}" (${e.className}): open your own link.\n\n` + links.map((l) => `${l.name}: ${base}?e=${encodeURIComponent(e.id)}&s=${encodeURIComponent(l.studentId)}&k=${l.key}`).join('\n');
+  openModal(`<h2>🔗 Correction links · ${esc(e.title)} · ${esc(e.className)}</h2>
+    <p class="muted">Copy this text and send it to the class (Teams, email…). Each link opens the correction of one student only: no password. ${links.length} student${links.length === 1 ? '' : 's'}.</p>
+    <textarea id="shText" readonly style="width:100%;height:320px;font-family:monospace;font-size:13px">${esc(text)}</textarea>
+    <div class="actions"><button id="shBack">← Back to the results</button><button id="shStop" title="The links stop working (you can open them again later)">🚫 Close the corrections</button><button class="primary" id="shCopy">📋 Copy the text</button><span id="shMsg" class="muted"></span></div>`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '1000px';
+  $('shCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(text); } catch (err) { $('shText').select(); document.execCommand('copy'); }
+    $('shMsg').textContent = '✅ Copied';
+  };
+  $('shBack').onclick = renderExamResults;
+  $('shStop').onclick = async () => {
+    try { const r = await tpost('api/exam', { action: 'share', examId: e.id, on: false }); X.exam = r.exam; renderExamResults(); } catch (err) { $('shMsg').textContent = err.message; }
+  };
+}
 // the teacher changes one mark (null = back to the automatic mark)
 async function saveMark(sid, key, marks, el) {
   const r = X.results.find((x) => x.studentId === sid);

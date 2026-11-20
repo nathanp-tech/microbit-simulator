@@ -15,6 +15,7 @@ Keys (prefix mb:):
   classctl        hash   class -> {message, paused, closed, exam}
   exams           hash   exam id -> exam
   examres:EXAM    hash   student id -> exam result
+  corrsecret             random key that signs the correction links of the students (no password needed)
   settings               class settings (also the class codes: classCodes {class: code})
   ver                    counter increased by every teacher action: browsers re-read their status only when it changes
   seen            hash   student id -> {t, live}: presence between two saves (cheap heartbeat)
@@ -22,7 +23,7 @@ Keys (prefix mb:):
   archive:NAME           copy of everything before a delete / reset (180 days)
   stats:YYYY-MM   hash   day -> number of database commands (quota gauge, online only)
 """
-import base64, json, os, random, re, threading, time, unicodedata, urllib.parse, urllib.request, zlib
+import base64, hashlib, hmac, json, os, random, re, threading, time, unicodedata, urllib.parse, urllib.request, zlib
 
 P = 'mb:'
 ID = re.compile(r'[\w-]{4,64}')
@@ -474,6 +475,23 @@ class Api:
         return r
 
     # ---------- request handling ----------
+    def corr_token(self, eid, sid):
+        # the key of a student's correction link: only the server can make it (signed with a random secret)
+        secret = self.r(['GET', P + 'corrsecret'])[0]
+        if not secret:
+            secret = base64.urlsafe_b64encode(os.urandom(24)).decode()
+            self.r(['SET', P + 'corrsecret', secret])
+        return hmac.new(secret.encode(), f'{eid}:{sid}'.encode(), hashlib.sha256).hexdigest()[:20]
+
+    def solutions(self):
+        sol = self.get_json('solutions')
+        if not sol:
+            try:
+                sol = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_solutions.json'), encoding='utf-8'))
+            except (OSError, ValueError):
+                sol = {}
+        return sol
+
     def is_teacher(self, ctx, params, body=None):
         code = str(ctx['headers'].get('X-Teacher-Code') or (params or {}).get('code') or (body or {}).get('code') or '').strip()
         return ctx.get('local') or code == self.teacher_code
@@ -505,6 +523,24 @@ class Api:
             return 200, info
         if path == '/api/settings':
             return 200, self.settings(teacher)
+        if path == '/api/correction':
+            # the correction page of one student (link given by the teacher once the test is marked): no password, no class code
+            eid, sid, key = str(params.get('e', '')), str(params.get('s', '')), str(params.get('k', ''))
+            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not hmac.compare_digest(key, self.corr_token(eid, sid)):
+                return 404, {'error': 'This correction link is not right. Ask your teacher.'}
+            raw = self.r(['HGET', P + 'exams', eid], ['HGET', P + 'examres:' + eid, sid])
+            exam, res = jload(raw[0]), jload(raw[1], {}) or {}
+            if not exam or not res:
+                return 404, {'error': 'This correction link is not right. Ask your teacher.'}
+            shared = exam.get('shared')
+            if not shared:
+                return 403, {'error': 'Your teacher has not opened the correction of this test yet.'}
+            sols = self.solutions()
+            return 200, {'exam': {k: exam.get(k) for k in ('id', 'title', 'className', 'challenges', 'startedAt')},
+                         'result': {'name': res.get('name'), 'marks': res.get('marks') or {},
+                                    'challenges': {c: {'score': v.get('score'), 'program': v.get('program')} for c, v in (res.get('challenges') or {}).items() if isinstance(v, dict)}},
+                         'grade': (shared.get('grades') or {}).get(sid),
+                         'solutions': {c: (sols.get(c) or [{}])[0].get('program') for c in exam.get('challenges', []) if sols.get(c)}}
         g = self.grant(ctx, params)
         if path == '/api/join':
             return 200, {'ok': g is not None, 'className': g if g not in (None, '*') else None}
@@ -598,13 +634,7 @@ class Api:
         if path == '/api/solutions':
             # answer key of the challenges (teacher preview): in the database (put-solutions), else api/_solutions.json
             # (kept out of git: generated from tests/solutions_src.js)
-            sol = self.get_json('solutions')
-            if not sol:
-                try:
-                    sol = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_solutions.json'), encoding='utf-8'))
-                except (OSError, ValueError):
-                    sol = {}
-            return 200, {'solutions': sol}
+            return 200, {'solutions': self.solutions()}
         if path == '/api/backups':
             return 200, {'backups': [b for b in (jload(x) for x in self.r(['LRANGE', P + 'backups', 0, -1])[0] or []) if b][::-1]}
         if path == '/api/stats':
@@ -959,6 +989,17 @@ class Api:
                     cmds.append(['HSET', P + 'classctl', exam['className'], json.dumps(ctl)])
                 self.r(*cmds)
                 return 200, {'ok': True, 'exam': exam}
+            if action == 'share':
+                # the correction links of the students (on: false closes them again). The grades out of 7 are those the teacher sees.
+                if data.get('on') is False:
+                    exam['shared'] = None
+                    self.r(['HSET', P + 'exams', eid, json.dumps(exam)])
+                    return 200, {'ok': True, 'exam': exam}
+                grades = {str(k): int(v) for k, v in (data.get('grades') or {}).items() if ID.fullmatch(str(k)) and v is not None and 1 <= int(v) <= 7}
+                exam['shared'] = {'at': time.time(), 'grades': grades}
+                results = [x for x in hash_dict(self.r(['HGETALL', P + 'examres:' + eid])[0]).values() if x and x.get('studentId')]
+                self.r(['HSET', P + 'exams', eid, json.dumps(exam)])
+                return 200, {'ok': True, 'exam': exam, 'links': [{'studentId': x['studentId'], 'name': x.get('name'), 'key': self.corr_token(eid, x['studentId'])} for x in results]}
             if action == 'delete':
                 self.r(['HDEL', P + 'exams', eid], ['DEL', P + 'examres:' + eid])
                 return 200, {'ok': True}

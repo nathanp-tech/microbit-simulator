@@ -85,6 +85,43 @@ function openAnswerHtml(q, given, withKey = true) {
   return `${has ? `<div class="wq-opt ${ok ? 'picked-ok' : 'picked-ko'}">${ok ? '✔' : '✖'} “${esc(given)}”</div>` : '<div class="wq-opt muted">no answer</div>'}${withKey ? `<div class="wq-opt right">○ Accepted: ${esc(q.model || q.accept.join(', '))}</div>` : ''}`;
 }
 const openRight = (q, given) => typeof given === 'string' && !(q.reject || []).some((r) => openHas(given, r)) && q.accept.some((a) => openHas(given, a));
+// ---------- The correction of a test: the blank test at the end, and the correction page of each student ----------
+const fmtHalf = (x) => (Math.round(x * 2) / 2).toString();
+// one part of a test. res: the check of the program, or the quiz graded (null: nothing submitted); marks: the marks given
+// (one per quiz question, or [mark] for a program), else the automatic marks.
+function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote, ownProgram, changed }) {
+  const max = chMarks(ch);
+  let got = 0, body;
+  if (ch.quiz) {
+    const answers = (program && program.answers) || [];
+    const marksOf = marks || (res ? res.criteria.map((c, i) => halfMark(c.points * (ch.questions[i].marks || 1))) : ch.questions.map(() => 0));
+    got = marksOf.reduce((a, b) => a + b, 0);
+    body = ch.questions.map((q, i) => {
+      const m = q.marks || 1, ok = marksOf[i] >= m, given = answers[i];
+      const yours = q.open ? (typeof given === 'string' && given.trim() ? `“${esc(given)}”` : '<i>no answer</i>')
+        : q.multi ? (Array.isArray(given) && given.length ? given.map((x) => esc(q.options[x])).join(' · ') : '<i>no answer</i>')
+        : given !== undefined && given !== null ? esc(q.options[given]) : '<i>no answer</i>';
+      const right = q.open ? esc(q.model || q.accept[0]) : q.multi ? q.answer.map((x) => esc(q.options[x])).join(' · ') : esc(q.options[q.answer]);
+      return `<div class="fb-q ${ok ? 'ok' : marksOf[i] > 0 ? 'part' : 'ko'}"><div class="fb-q-head"><b>${ok ? '✔' : marksOf[i] > 0 ? '◐' : '✖'} ${i + 1}. ${esc(q.q)}</b><span class="fb-m">${fmtHalf(marksOf[i])} / ${m}</span></div>
+        ${q.code ? `<div class="q-code fb-code" data-fbq="${k}:${i}"></div>` : ''}
+        <div class="fb-line">Your answer: ${yours}</div>${ok ? '' : `<div class="fb-line fb-right">Right answer: ${right}</div>`}${q.why ? `<div class="fb-why">💡 ${esc(q.why)}</div>` : ''}</div>`;
+    }).join('');
+  } else {
+    got = marks ? marks[0] : res ? halfMark(res.score / 100 * max) : 0;
+    body = `${res ? `<ul class="fb-crit">${res.criteria.filter((c) => c.max > 0 || !c.ok).map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>` : '<p class="muted">Nothing submitted.</p>'}
+      ${ownProgram && program ? `<h4 class="fb-h">🧑‍💻 Your program</h4><div class="fb-sol" data-fbown="${k}"></div>` : ''}
+      ${hasSolution ? `<h4 class="fb-h">✏️ Correction: a program that works</h4><div class="fb-sol" data-fbsol="${k}"></div>${solutionNote ? `<p class="fb-why">💡 ${esc(solutionNote)}</p>` : ''}` : ''}`;
+  }
+  const full = got >= max;
+  return `<section class="fb-part"><h3>${full ? '🎉' : got > 0 ? '👍' : '💪'} ${esc(ch.title)} · <span class="fb-total">${fmtHalf(got)} / ${max} marks</span></h3>${changed ? '<p class="fb-changed">✎ Your teacher changed a mark in this part.</p>' : ''}${body}</section>`;
+}
+// draws the blocks of a correction: the quiz programs, the solutions (sols[k]) and the student's programs (owns[k])
+function renderCorrectionCode(root, chs, sols, owns, keep) {
+  const draw = (div, prog) => { const w = prog ? renderProgramInto(div, prog) : null; if (w) keep.push(w); };
+  root.querySelectorAll('[data-fbq]').forEach((div) => { const [k, i] = div.dataset.fbq.split(':').map(Number); draw(div, chs[k].questions[i].code); });
+  root.querySelectorAll('[data-fbsol]').forEach((div) => draw(div, sols[Number(div.dataset.fbsol)]));
+  root.querySelectorAll('[data-fbown]').forEach((div) => draw(div, owns[Number(div.dataset.fbown)]));
+}
 const categoryOf = (ch) => CATEGORIES.find((c) => c.id === ch.cat) || CATEGORIES[0];
 
 // ---------- helpers for the tests ----------
