@@ -146,7 +146,17 @@ const QB = (() => {
     shakeReset: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('count') }, { VALUE: num(0) }), blk('variables_change', { VAR: V('count') }, { VALUE: num(1) }), blk('basic_show_number', {}, { NUMBER: getv('count') })) })),
     minusBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('lives') }, { VALUE: num(10) }), blk('variables_change', { VAR: V('lives') }, { VALUE: num(-3) }), blk('basic_show_number', {}, { NUMBER: getv('lives') })) })),
     changeBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('score') }, { VALUE: num(3) }), blk('variables_change', { VAR: V('score') }, { VALUE: num(2) }), blk('basic_show_number', {}, { NUMBER: getv('score') })) })),
-    wrongCompass: prog(blk('basic_forever', {}, { HANDLER: seq(ifElse([[cmp(sensor('input_compass'), 'LT', num(180)), [str('W')]]], [str('E')])) })),
+    // a full compass with only "if" blocks: the W part can never be true (135 instead of 315)
+    wrongCompass: (() => {
+      const h = () => sensor('input_compass');
+      const op = (a, o, b) => ({ block: blk('logic_operation', { OP: o }, { A: a, B: b }) });
+      const part = (cond, letter) => ifElse([[cond, [str(letter)]]]);
+      return prog(blk('basic_forever', {}, { HANDLER: seq(
+        part(op(cmp(h(), 'LT', num(45)), 'OR', cmp(h(), 'GT', num(315))), 'N'),
+        part(op(cmp(h(), 'GT', num(45)), 'AND', cmp(h(), 'LT', num(135))), 'E'),
+        part(op(cmp(h(), 'GT', num(135)), 'AND', cmp(h(), 'LT', num(225))), 'S'),
+        part(op(cmp(h(), 'GT', num(225)), 'AND', cmp(h(), 'LT', num(135))), 'W')) }));
+    })(),
   };
 })();
 // what a "forever" program shows last once a sensor is set (compass letter, light level…)
@@ -226,7 +236,7 @@ const CHALLENGES = [
       { marks: 1, open: true, q: 'Name one OUTPUT of the micro:bit.', accept: ['led', 'leds', 'screen', 'display', 'speaker', 'sound', 'music', 'melody', 'tone', 'buzzer', 'pin', 'radio', 'output'], reject: ['button', 'sensor', 'compass', 'temperature', 'thermometer', 'accelerometer', 'microphone', 'light level', 'input'], model: 'the LED screen, the speaker (music), the pins, the radio' },
       { marks: 2, open: true, q: 'What number does this program show? Type the number.', code: QB.minusBy, accept: ['7', 'seven'], reject: ['13'], model: '7' },
       { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
-      { marks: 2, q: 'This program should show E when the micro:bit faces East (90°) and W when it faces West (270°). It always shows the wrong letter. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Change 180 to 360', 'Add a pause in the forever block', 'Use the temperature instead of the compass heading'], answer: 0 },
+      { marks: 2, q: 'This compass should always show where the micro:bit points: N, E, S or W. It does not work for one direction. What must you change?', code: QB.wrongCompass, options: ['In the W part, change 135 to 315', 'Swap the letters E and W', 'In the N part, change "or" to "and"', 'Change 45 to 90 in the E part'], answer: 0 },
       { marks: 1, open: true, q: 'Which block runs the blocks inside it again and again, without ever stopping? Type its name.', accept: ['forever'], model: 'forever' },
     ],
   },
