@@ -165,7 +165,7 @@ const CHALLENGES = [
     skills: 'Units 1-4',
     questions: [
       { marks: 3, q: 'Which ones are OUTPUTS of the micro:bit? Tick all the right ones.', why: "Outputs show or play something: the LED screen and the speaker. Button A, the light sensor, the compass and the accelerometer are inputs (they measure or detect).", multi: true, options: ['The LED screen', 'The speaker (music)', 'Button A', 'The light sensor', 'The compass', 'The accelerometer (shake)'], answer: [0, 1] },
-      { marks: 1, open: true, q: 'Button A: is it an input or an output? Type one word.', why: "You press it: it gives information TO the micro:bit, so it is an input.", accept: ['input'], reject: ['output'], model: 'input' },
+      { marks: 1, open: true, q: 'You want the micro:bit to show where North is. Which sensor do you use?', accept: ['compass', 'magnetometer', 'compass heading'], model: 'the compass', why: "The compass (compass heading block) measures the direction: 0° is North." },
       { marks: 1, open: true, q: 'Name one INPUT of the micro:bit (a button or a sensor).', why: "Inputs: buttons A and B, the logo, light level, temperature, compass, accelerometer (shake, tilt), microphone (sound level), pins.", accept: ['button', 'light', 'temperature', 'thermometer', 'compass', 'accelerometer', 'shake', 'tilt', 'microphone', 'sound', 'noise', 'logo', 'touch', 'pin', 'sensor', 'gesture', 'magnet', 'input'], reject: ['led', 'leds', 'screen', 'speaker', 'output'], model: 'a button, light level, temperature, compass, accelerometer (shake), microphone (sound), logo, pins' },
       { marks: 2, q: 'This program should show a heart when you press A. What is wrong?', why: "The event block says button B: choose A with the little arrow.", code: QB.wrongButton, options: ['It uses button B: change it to A', 'The heart icon does not exist', 'It needs a forever block', 'It needs a pause'], answer: 0 },
       { marks: 2, q: 'This program shows the light level. How can you make it show 0?', why: "The light sensor is in the LED screen: cover it with your hand and the light level goes down to 0.", code: QB.lightMeter, options: ['Cover the LED screen with your hand (dark)', 'Shake the micro:bit', 'Press button A', 'Put the micro:bit somewhere warm'], answer: 0 },
@@ -227,7 +227,7 @@ const CHALLENGES = [
       { marks: 2, open: true, q: 'What number does this program show? Type the number.', code: QB.minusBy, accept: ['7', 'seven'], reject: ['13'], model: '7' },
       { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
       { marks: 2, q: 'This program should show E when the micro:bit faces East (90°) and W when it faces West (270°). It always shows the wrong letter. What must you change?', code: QB.wrongCompass, options: ['Swap the letters E and W', 'Change 180 to 360', 'Add a pause in the forever block', 'Use the temperature instead of the compass heading'], answer: 0 },
-      { marks: 1, open: true, q: 'The temperature sensor: is it an input or an output? Type one word.', accept: ['input'], reject: ['output'], model: 'input' },
+      { marks: 1, open: true, q: 'Which block runs the blocks inside it again and again, without ever stopping? Type its name.', accept: ['forever'], model: 'forever' },
     ],
   },
   {

@@ -38,10 +38,10 @@
         const w = gradeQuiz(ch, ch.questions.map((q) => (q.open ? (q.reject || ['banana'])[0] : q.multi ? q.options.map((o, k) => k).filter((k) => !q.answer.includes(k)) : (q.answer + 1) % q.options.length)));
         say(w.score === 0, `${ch.id}: wrong answers → ${w.score} %`);
         // open questions: typed answers, flexible
-        const OPEN = [[/Button A: is it/, ['Input', 'an input', 'INPUT.', 'imput', 'inputs'], ['output', 'an output', 'both input and output', 'a button', '']],
+        const OPEN = [[/where North is/, ['compass', 'The Compass', 'compas', 'the compass heading', 'magnetometer'], ['light', 'temperature', 'accelerometer', '']],
           [/one INPUT/, ['button A', 'the light sensor', 'Température', 'acelerometer', 'the compass', 'Microphone', 'shake'], ['LED', 'the screen', 'speaker', 'banana']],
           [/one OUTPUT/, ['LED screen', 'the leds', 'Speaker', 'sound', 'music', 'display'], ['button', 'the light level', 'temperature sensor', 'compass', 'banana']],
-          [/temperature sensor: is it/, ['input', 'Input!'], ['output', 'outpt', 'input and output']],
+          [/again and again/, ['forever', 'Forever', 'the forever block', 'forver'], ['repeat', 'on start', 'loop', '']],
           [/What number/, null, null]];
         ch.questions.forEach((q) => {
           if (!q.open) return;
