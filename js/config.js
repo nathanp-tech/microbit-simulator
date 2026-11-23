@@ -10,4 +10,4 @@ const CLASSROOM = {
 CLASSROOM.allowGuided = true;
 CLASSROOM.allowFree = true;
 // Classes the teacher can assign to each student (Manage tab of the dashboard).
-CLASSROOM.classes = ['Tech5ENa', 'Tech5ENb', 'Tech5ENc', 'Tech5ENd', 'Tech5ENe'];
+CLASSROOM.classes = ['Tech5ENa', 'Tech5ENc', 'Tech5ENd', 'Tech5ENe'];

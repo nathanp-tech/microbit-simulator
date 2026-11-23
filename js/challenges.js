@@ -9,7 +9,7 @@ const CATEGORIES = [
 ];
 // the two tests of 40 minutes: the blank test (practice, no password) and the test (password of the class)
 const BLANK_TEST = ['quiz-blank', 'faces', 'rps', 'sound-a'];
-const REAL_TEST = ['quiz-test', 'temp-b', 'dice-dots', 'light-levels'];
+const REAL_TEST = ['quiz-test', 'temp-b', 'dice-dots', 'light-levels', 'score-ab', 'max-temp'];
 // the exams the teacher can start (📝 Start an exam): add a new one here (its challenges must be in CHALLENGES)
 const EXAMS = [
   { id: 'blank', title: 'Blank exam', challenges: BLANK_TEST, minutes: 40, note: 'The practice exam: students can also start it alone with the 🧪 Blank test card.' },
@@ -197,6 +197,11 @@ const QB = (() => {
     shakeReset: prog(blk('input_on_gesture', { GESTURE: 'Shake' }, { HANDLER: seq(blk('variables_set', { VAR: V('count') }, { VALUE: num(0) }), blk('variables_change', { VAR: V('count') }, { VALUE: num(1) }), blk('basic_show_number', {}, { NUMBER: getv('count') })) })),
     minusBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('lives') }, { VALUE: num(10) }), blk('variables_change', { VAR: V('lives') }, { VALUE: num(-3) }), blk('basic_show_number', {}, { NUMBER: getv('lives') })) })),
     changeBy: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('score') }, { VALUE: num(3) }), blk('variables_change', { VAR: V('score') }, { VALUE: num(2) }), blk('basic_show_number', {}, { NUMBER: getv('score') })) })),
+    randomShow: prog(blk('input_on_button', { BUTTON: 'A' }, { HANDLER: seq(blk('basic_show_number', {}, { NUMBER: { block: blk('math_random', {}, { FROM: num(1), TO: num(6) }) } })) })),
+    bigSmall: prog(blk('basic_on_start', {}, { HANDLER: seq(blk('variables_set', { VAR: V('x') }, { VALUE: num(4) }),
+      ifElse([[cmp(getv('x'), 'GT', num(3)), [str('BIG')]]], [str('SMALL')])) })),
+    heartPause: prog(blk('input_on_button', { BUTTON: 'A' }, { HANDLER: seq(blk('basic_show_icon', { ICON: 'Heart' }),
+      blk('basic_pause', {}, { PAUSE: { shadow: { type: 'timePicker', fields: { MS: 1000 } } } }), blk('basic_clear_screen')) })),
     // a full compass with only "if" blocks: the W part can never be true (135 instead of 315)
     wrongCompass: (() => {
       const h = () => sensor('input_compass');
@@ -280,7 +285,7 @@ const CHALLENGES = [
   // ---------------- 📝 Test ----------------
   {
     id: 'quiz-test', cat: 'test', level: 2, title: 'Quiz (test)', lesson: 'Units 1-4', quiz: true,
-    description: 'Six questions. Some show a program in blocks; for some you type a short answer. Your answers are saved as you go: you can come back and change them until the end.',
+    description: 'Ten questions. Some show a program in blocks; for some you type a short answer. Your answers are saved as you go: you can come back and change them until the end.',
     skills: 'Units 1-4',
     questions: [
       { marks: 2, q: 'Which ones are SENSORS of the micro:bit? Tick all the right ones.', multi: true, options: ['Light level', 'Temperature', 'Compass', 'Accelerometer (shake, tilt)', 'Microphone (sound level)', 'Camera', 'GPS'], answer: [0, 1, 2, 3, 4] },
@@ -289,6 +294,10 @@ const CHALLENGES = [
       { marks: 2, q: 'This program should count the shakes. It always shows 1. Why?', code: QB.shakeReset, options: ['count is set to 0 at every shake: set it to 0 in "on start" instead', '"change count by 1" should be "by 0"', 'show number cannot show a variable', '"on shake" only works once'], answer: 0 },
       { marks: 2, q: 'This compass should always show where the micro:bit points: N, E, S or W. It does not work for one direction. What must you change?', code: QB.wrongCompass, options: ['In the W part, change 135 to 315', 'Swap the letters E and W', 'In the N part, change "or" to "and"', 'Change 45 to 90 in the E part'], answer: 0 },
       { marks: 1, open: true, q: 'Which block runs the blocks inside it again and again, without ever stopping? Type its name.', accept: ['forever'], model: 'forever' },
+      { marks: 2, q: 'Which numbers can this program show?', code: QB.randomShow, options: ['1, 2, 3, 4, 5 or 6', '0, 1, 2, 3, 4, 5 or 6', 'Only 1 or 6', '1, 2, 3, 4 or 5'], answer: 0 },
+      { marks: 2, open: true, q: 'What does this program show? Type it.', code: QB.bigSmall, accept: ['big'], reject: ['small'], model: 'BIG' },
+      { marks: 2, q: 'You press A once. What do you see?', code: QB.heartPause, options: ['A heart for a short time, then the screen is empty', 'A heart that stays on the screen', 'Nothing: the screen is cleared at once', 'A heart that blinks again and again'], answer: 0 },
+      { marks: 1, open: true, q: 'It is completely dark. What number does "light level" give? Type the number.', accept: ['0', 'zero'], reject: ['255'], model: '0' },
     ],
   },
   {
@@ -330,6 +339,39 @@ const CHALLENGES = [
       { label: 'Light 240 shows 4', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(240)) === '4' },
       { label: 'Right at the limits (63 → 1, 64 → 2, 191 → 3, 192 → 4)', points: 20, run: (make) => [[63, '1'], [64, '2'], [191, '3'], [192, '4']].filter(([v, n]) => sensorRound(make, (T) => T.setLight(v)) === n).length / 4 },
     ],
+  },
+  {
+    id: 'score-ab', marks: 3, cat: 'test', level: 2, title: 'Score', lesson: 'Unit 4',
+    description: '<ul class="steps"><li>The score starts at <b>0</b></li><li>Press [[btn:A]] → the score goes <b>up by 1</b> and is shown</li><li>Press [[btn:B]] → the score goes <b>down by 1</b> and is shown</li></ul><p class="test-it">🧪 <b>Test it:</b> A, A, A shows 1, 2, 3. Then B shows 2.</p>',
+    skills: 'variables, change by, on button A / B pressed',
+    hints: ['Variables → Make a Variable… → score. "set score to 0" in "on start".', 'In "on button A pressed": change score by 1, then show number score. Same for B with -1.'],
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
+    tests: (() => {
+      // the number shown after each press
+      const presses = (make, keys) => { const T = make().wait(1500); return keys.split('').map((k) => { const t0 = T.t; T.click(k, 2500); const n = T.numbers(t0); return n.length ? n[n.length - 1] : null; }); };
+      return [
+        { label: 'Starts at 0: the first A shows 1', points: 20, run: (make) => presses(make, 'A')[0] === 1 },
+        { label: 'A goes up by 1 (A, A, A → 1, 2, 3)', points: 40, run: (make) => presses(make, 'AAA').join() === '1,2,3' },
+        { label: 'B goes down by 1 (A, A, A, B, B → 2, 1)', points: 40, run: (make) => presses(make, 'AAABB').slice(3).join() === '2,1' },
+      ];
+    })(),
+  },
+  {
+    id: 'max-temp', marks: 5, cat: 'test', level: 3, title: 'Highest temperature', lesson: 'Unit 4',
+    description: '<ul class="steps"><li>The micro:bit <b>remembers the highest temperature</b> since the start</li><li>Press [[btn:A]] → show that <b>highest</b> temperature (°C), even if it is colder now</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the thermometer up to 30, then down to 15. Press A: it must show 30.</p>',
+    skills: 'variables, forever, if, comparison, temperature',
+    hints: ['A variable "highest": set it to the temperature in "on start".', 'forever: if temperature > highest then set highest to temperature. On button A: show number highest.'],
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing shows until A is pressed',
+    tests: (() => {
+      // the temperatures one after the other (1.5 s each), then A: the number shown
+      const run = (make, temps) => { const T = make(); T.setTemp(temps[0]); T.wait(1500); for (const v of temps.slice(1)) { T.setTemp(v); T.wait(1500); } const t0 = T.t; T.click('A', 3000); return T.numbers(t0); };
+      return [
+        { label: 'Nothing changed: A shows the temperature (21 °C)', points: 20, run: (make) => run(make, [21]).includes(21) },
+        { label: 'It got warmer: A shows the new highest (29 °C)', points: 25, run: (make) => run(make, [21, 29]).includes(29) },
+        { label: 'Warmer, then colder: A still shows the highest (21 → 29 → 15: 29)', points: 40, run: (make) => { const n = run(make, [21, 29, 15]); return n.includes(29) && !n.includes(15); } },
+        { label: 'Colder from the start: A shows the highest (24 → 12: 24)', points: 15, run: (make) => { const n = run(make, [24, 12]); return n.includes(24) && !n.includes(12); } },
+      ];
+    })(),
   },
 ];
 
