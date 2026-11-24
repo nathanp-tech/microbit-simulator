@@ -348,21 +348,27 @@ AI_SCHEMA = {
 }
 AI_PROMPT = '\n'.join([
     'You mark one program of a test for students aged 13-14 (beginners), written with the MakeCode blocks of the BBC micro:bit.',
-    'You get: the task, the marks, a program that works (one way among many), the student program (MakeCode JavaScript made',
-    'from their blocks; only the blocks that run are in it) and the results of automatic checks run on a micro:bit simulator.',
+    'You get: the task, the marks, a MARKING GUIDE for this task, a program that works (one way among many), the student',
+    'program (MakeCode JavaScript made from their blocks; only the blocks that run are in it) and the results of automatic',
+    'checks run on a micro:bit simulator.',
     '',
-    'RULES',
-    '1. Mark what the program DOES, not how it is written. Any way that does the task gets full marks: other blocks, other',
-    '   order, if / else or several ifs, a word before the number, a pause or a clear screen after, a forever that checks a',
-    '   button, variables named differently… Never compare line by line with the program that works.',
-    '2. The automatic checks really ran the program: trust them for what it shows. But they can be too strict (for example',
-    '   a program that shows the right thing in another way): then use your own reading of the code and say so.',
-    '3. Partial marks: give marks for each part of the task that works or is nearly right (a small slip, a wrong limit).',
-    '   A program that does nothing of the task gets 0. Marks are in half marks, from 0 to the maximum.',
-    '4. Do not take marks away for style, extra blocks or extra things shown, unless they stop the task from working.',
-    '5. feedback: written TO the student, in simple English (level A2), 1 to 3 short sentences: what works, and what to',
-    '   change if something does not. Kind and precise, with the names of the blocks. Never give the mark in it.',
-    '6. teacherNote: for the teacher, 1 to 4 sentences: why this mark, and anything to check by hand.',
+    'HOW TO MARK',
+    '1. Follow the MARKING GUIDE: it says what each mark is for and how much the usual slips cost. Mark what the program',
+    '   DOES and what it shows the student understood, not how it is written: other blocks, other order, if / else or several',
+    '   ifs, a word before the number, a pause or a clear screen after, a forever that checks a button… are all fine.',
+    '2. Be fair, like a kind teacher: a SMALL SLIP that a beginner fixes in a few seconds (the wrong button letter, the wrong',
+    '   icon, a limit off by one, a missing show block, a wrong number in a block) costs AT MOST 1 mark when the rest is right.',
+    '   Never give 0 to a program that does most of the task.',
+    '3. The automatic checks really ran the program: they are reliable for what it shows, but they are ALL OR NOTHING (a',
+    '   program on the wrong button gets 0 everywhere). Never copy their score: use them to see what works, then mark with',
+    '   the guide.',
+    '4. Marks are in half marks, from 0 to the maximum. 0 only when nothing of the task is there.',
+    '5. Do not take marks away for style, extra blocks or extra things shown, unless they stop the task from working.',
+    '6. feedback: the comment the TEACHER gives to the student, in simple English (level A2), 1 to 3 short sentences:',
+    '   what works, then what to change (with the names of the blocks). Kind and precise. Never give the mark, never',
+    '   talk about checks, tests, AI or a computer: write as the teacher.',
+    '7. teacherNote: for the teacher, 1 to 3 sentences: the marks part by part (for example "A part 2/2, B part 1/2: wrong',
+    '   button") and anything to check by hand.',
 ])
 
 
@@ -389,19 +395,77 @@ AI_QUIZ_PROMPT = '\n'.join([
     '2. A wrong, vague or contradictory answer (two answers, one wrong) does not. Do not guess what they meant.',
     '3. When there is a program, work out yourself what it does: the expected answer is right, but check the reasoning.',
     '4. Half marks only when the question has 2 marks or more and the answer is partly right.',
-    '5. feedback: TO the student, simple English (A2), one short sentence: why it is right, or the right idea. No mark in it.',
+    '5. feedback: the comment the TEACHER gives to the student, simple English (A2), one short sentence: why it is right,',
+    '   or the right idea. No mark in it; never talk about AI, a computer or an answer key: write as the teacher.',
     '6. teacherNote: for the teacher, one sentence, especially when you disagree with the answer key.',
     '7. Give one item per question, with the question number as given.',
 ])
+
+
+# How each challenge is marked (the AI follows it). Kept on the server: not in the students' app.
+AI_GUIDES = {
+    'faces': """4 marks. Button A shows a happy face: 2 marks. Button B shows a sad face: 2 marks.
+- A face drawn with show leds that clearly looks happy / sad counts as the face.
+- Wrong button for a part (for example the happy face on B and nothing on A, or both on A): that part 1 instead of 2.
+- Faces swapped (A sad, B happy): 2 / 4 in all (both events are right, the faces are not).
+- Another icon instead of the face (a heart…): that part 1.
+- Only one button done: 2 / 4. A face shown by itself (on start / forever) without any button: 1 / 4.""",
+    'rps': """6 marks. On shake (1). A random choice of three possibilities, kept in a variable (pick random 0 to 2, 1 to 3…) (2).
+Three different pictures or words for rock, paper and scissors, one for each value, with if / else if or several ifs (2).
+Every shake shows exactly one of the three (1).
+- Another event (a button instead of shake): lose 1 only.
+- Only two possibilities (random 0 to 1, or a value never used): lose 1 or 2.
+- The number shown instead of pictures (show number choice): at most 2 / 6.
+- Any pictures or words that are clearly different are fine (no need for the exact icons).""",
+    'sound-a': """4 marks. On button A (1). show number (or show string) (1). The sound level block in it (2).
+- Wrong button (B, A+B, shake): 3 / 4.
+- Another sensor (light level, temperature…) instead of sound level: 2 / 4.
+- Shown all the time in a forever, without the button: 2 / 4 (the right sensor, the wrong trigger).
+- A fixed number instead of the sensor: 1 / 4.""",
+    'temp-b': """4 marks. On button B (1). show number (or show string) (1). The temperature block in it (2).
+- Wrong button (A, A+B, shake): 3 / 4.
+- Another sensor (light level, sound level…) instead of temperature: 2 / 4.
+- Shown all the time in a forever, without the button: 2 / 4.
+- A fixed number instead of the sensor: 1 / 4.""",
+    'dice-dots': """6 marks. On shake (1). A random number for six possibilities, in a variable (pick random 1 to 6, or 0 to 5 used the right
+way) (1). Six faces drawn with dots, one LED = one dot, each with the right number of dots: half a mark per right face (3).
+One face for each value, chosen with if / else if or several ifs (1).
+- The dots can be anywhere: only the number of lit LEDs counts.
+- Another event (a button): lose 1 only.
+- A random range that misses a face or gives a value without a face (1 to 5, 0 to 6…): lose 1.
+- show number instead of dots: at most 2 / 6.""",
+    'light-levels': """5 marks. Runs all the time (forever, or a loop) and reads the light level (1). Shows 1, 2, 3 and 4 for the four ranges
+(0-63 → 1, 64-127 → 2, 128-191 → 3, 192-255 → 4), half a mark per level (2). The conditions are in an order where every
+level can be reached (1). The limits are right (63 / 64, 127 / 128, 191 / 192) (1).
+- A limit off by one (< 63 instead of < 64…): lose half a mark for each, at most 1.
+- With a button instead of forever: lose 1 only.
+- Conditions in an order that makes levels impossible (for example "< 192" first): lose the levels that never show.
+- show string "1" or "LEVEL 1" are fine.""",
+    'score-ab': """3 marks. A score variable that starts at 0 (on start, or not set at all: a variable starts at 0) (0.5).
+Button A adds 1 to it (1). Button B takes 1 away (1). The score is shown after each press (0.5).
+- show before change (shows the old score): lose 0.5.
+- set score to 1 (instead of change by 1): lose that part.
+- B adds instead of taking away, or the buttons swapped: lose 1.
+- The score shown all the time in a forever is fine.""",
+    'max-temp': """5 marks. A variable for the highest temperature (1). Checked again and again (forever, or every time) (1). Compares the
+temperature with the highest and keeps the bigger one (if temperature > highest then set highest, or max of) (2).
+Button A shows the highest (1).
+- Start value: the temperature, 0 or a very low number are all fine.
+- Updated only when A is pressed (no forever) but with the right comparison: 3 / 5.
+- set highest to temperature without comparing (it shows the temperature now): at most 2 / 5.
+- Shows the temperature now instead of a highest: 1 / 5.
+- Shown all the time in a forever instead of on A: lose 1.""",
+}
 
 
 class AIError(Exception):
     pass
 
 
-def ai_mark(task, max_marks, code, solution, checks):
+def ai_mark(task, max_marks, code, solution, checks, guide=''):
     """One OpenAI call (Responses API, temperature 0, strict JSON schema). Returns {mark, feedback, teacherNote}."""
-    user = (f'TASK ({fmt_num(max_marks)} marks)\n{task}\n\nA PROGRAM THAT WORKS\n{solution or "(none)"}\n\n'
+    guide = guide or 'Give marks for each part of the task that works or is nearly right.'
+    user = (f'TASK ({fmt_num(max_marks)} marks)\n{task}\n\nMARKING GUIDE\n{guide}\n\nA PROGRAM THAT WORKS\n{solution or "(none)"}\n\n'
             f'STUDENT PROGRAM\n{code or "(empty: no blocks that run)"}\n\nAUTOMATIC CHECKS\n{checks or "(none)"}')
     out, model = ai_call(AI_PROMPT, user, 'microbit_mark', AI_SCHEMA)
     try:
@@ -692,7 +756,9 @@ class Api:
             return 200, {'exam': {k: exam.get(k) for k in ('id', 'title', 'className', 'challenges', 'startedAt')},
                          'result': {'name': res.get('name'), 'marks': res.get('marks') or {},
                                     'challenges': {c: {'score': v.get('score'), 'program': v.get('program')} for c, v in (res.get('challenges') or {}).items() if isinstance(v, dict)},
-                                    'ai': {c: {'mark': v.get('mark'), 'feedback': v.get('feedback')} for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)}},
+                                    'review': {c: {'mark': v.get('mark')} for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)},
+                                    'comments': {k: t for k, t in {**{c: v.get('feedback') for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)},
+                                                                   **(res.get('comments') or {})}.items() if t}},
                          'grade': (shared.get('grades') or {}).get(sid),
                          'solutions': {c: (sols.get(c) or [{}])[0].get('program') for c in exam.get('challenges', []) if sols.get(c)}}
         g = self.grant(ctx, params)
@@ -1118,6 +1184,21 @@ class Api:
             res['markedAt'] = time.time()
             self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
             return 200, {'ok': True, 'marks': marks}
+        if path == '/api/exam/comment':
+            # The teacher writes / edits the comment of one part for one student (text: null = back to the suggested one).
+            eid, sid, key = str(data.get('examId', '')), str(data.get('studentId', '')), str(data.get('key', ''))
+            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not re.fullmatch(r'[\w-]{1,40}(#\d{1,2})?', key):
+                return 400, {'error': 'bad request'}
+            res = jload(self.r(['HGET', P + 'examres:' + eid, sid])[0], {}) or {}
+            if not res:
+                return 404, {'error': 'no such result'}
+            com = res.setdefault('comments', {})
+            if data.get('text') is None:
+                com.pop(key, None)
+            else:
+                com[key] = clean_text(data.get('text'), 800)
+            self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
+            return 200, {'ok': True, 'comments': com}
         if path == '/api/exam/ai':
             # AI marking of one program of one student (after the test): the teacher's page sends the task, the student's
             # program (MakeCode JavaScript), a program that works and the automatic checks; the mark is saved as the
@@ -1150,7 +1231,7 @@ class Api:
                 else:
                     mx = float(data.get('max') or 0)
                     out = ai_mark(clean_text(data.get('task'), 3000), mx, clean_text(data.get('code'), 8000),
-                                  clean_text(data.get('solution'), 4000), clean_text(data.get('checks'), 3000))
+                                  clean_text(data.get('solution'), 4000), clean_text(data.get('checks'), 3000), AI_GUIDES.get(cid, ''))
                     found[cid] = {**out, 'mark': max(0.0, min(mx, round(float(out['mark']) * 2) / 2)), 'at': now}
             except AIError as err:
                 ai_log(False, str(err))

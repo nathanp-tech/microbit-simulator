@@ -270,7 +270,35 @@ function aiBox(r, key, it) {
   if (!a || !it) return '';
   const stale = ((r.challenges || {})[key.split('#')[0]] || {}).at > a.at;
   return `<div class="ai-note">🤖 <b>AI: ${fmtMark(it.ai)} / ${fmtMark(it.max)}</b> <span class="muted">(${it.q === null ? 'automatic checks' : 'answer key'}: ${fmtMark(it.tests)})</span>${stale ? ' <b>⚠ the program changed after: mark it again</b>' : ''}
-    <div>💬 <i>For the student:</i> ${esc(a.feedback)}</div><div>📝 <i>Why:</i> ${esc(a.teacherNote)}</div></div>`;
+    <div>📝 <i>Why:</i> ${esc(a.teacherNote)}</div></div>`;
+}
+// the comment the student will read in their correction: the AI's suggestion, or what the teacher wrote (it wins)
+function commentBox(r, key, it) {
+  if (!r || !r.studentId || !it || !it.submitted) return '';
+  const a = r.ai && r.ai[key], mine = r.comments && Object.prototype.hasOwnProperty.call(r.comments, key);
+  const text = mine ? r.comments[key] : (a && a.feedback) || '';
+  return `<div class="cmt-box"><label>💬 Comment for the student <span class="muted">(the student sees it in their correction${mine ? ' · ✎ written by you' : a ? ' · suggested by the AI: edit it freely' : ''})</span></label>
+    <textarea class="cmt" data-sid="${esc(r.studentId)}" data-key="${esc(key)}" rows="2" maxlength="800" placeholder="Write a comment for the student (optional)">${esc(text)}</textarea>
+    <div class="cmt-actions"><span class="cmt-ok muted"></span>${mine && a ? `<button class="mini" data-cmtreset="${esc(r.studentId)}|${esc(key)}" title="Back to the comment suggested by the AI">↺ AI suggestion</button>` : ''}</div></div>`;
+}
+async function saveComment(sid, key, text) {
+  const r = X.results.find((x) => x.studentId === sid);
+  const d = await tpost('api/exam/comment', { examId: X.exam.id, studentId: sid, key, text });
+  if (r) r.comments = d.comments;
+}
+// the comment boxes of what is on the screen: saved when the teacher leaves the box; again() redraws (after ↺)
+function bindComments(again) {
+  document.querySelectorAll('textarea.cmt').forEach((t) => {
+    const first = t.value;
+    t.onchange = async () => {
+      const ok = t.parentElement.querySelector('.cmt-ok');
+      try { await saveComment(t.dataset.sid, t.dataset.key, t.value.trim()); ok.textContent = '✓ saved'; setTimeout(() => { ok.textContent = ''; }, 1500); }
+      catch (err) { ok.textContent = '⚠ not saved: ' + err.message; t.value = first; }
+    };
+  });
+  document.querySelectorAll('[data-cmtreset]').forEach((b) => {
+    b.onclick = async () => { const [sid, key] = b.dataset.cmtreset.split('|'); try { await saveComment(sid, key, null); again(); } catch (err) { alert('Not saved: ' + err.message); } };
+  });
 }
 // the text of a challenge for the AI (no pictures)
 function taskText(ch) {
@@ -533,7 +561,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
         const it = sheet.items.find((x) => x.key === `${cid}#${k}`);
         return `<div class="ev-q"><p><b>${k + 1}. ${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-evq="${esc(cid)}:${k}"></div>` : ''}
           ${q.open ? openAnswerHtml(q, answers[k]) : q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
-          ${aiBox(r, `${cid}#${k}`, it)}${markRow(it)}</div>`;
+          ${aiBox(r, `${cid}#${k}`, it)}${q.open ? commentBox(r, `${cid}#${k}`, it) : ''}${markRow(it)}</div>`;
       }).join('')}</section>`;
     }
     const it = sheet.items.find((x) => x.key === cid);
@@ -542,7 +570,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
         <div class="ev-right"><div class="mc-boards ev-board" data-evb="${esc(cid)}" style="padding:0"></div>
           <div class="actions"><button class="mini" data-evrun="${esc(cid)}" title="Start their program again">↻ Restart</button><span class="muted">${c.checks || 1} submission${(c.checks || 1) > 1 ? 's' : ''}${c.at ? ' · last ' + new Date(c.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
           <div class="ev-crit" data-evc="${esc(cid)}"></div></div></div>` : '<p class="ev-empty">Nothing submitted for this part.</p>'}
-      ${aiBox(r, cid, it)}${markRow(it)}</section>`;
+      ${aiBox(r, cid, it)}${commentBox(r, cid, it)}${markRow(it)}</section>`;
   };
   const nav = e.challenges.map((cid, i) => { const ch = CHALLENGES.find((k) => k.id === cid), m = partMarks(cid); return `<a href="#ev-${i}" data-evgo="${i}">${ch ? (ch.quiz ? 'Quiz' : esc(ch.title)) : esc(cid)} <b>${m.sent || m.changed ? fmtMark(m.got) : '—'}/${fmtMark(m.max)}</b></a>`; }).join('');
   openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
@@ -585,6 +613,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
     };
   });
   document.querySelectorAll('[data-evauto]').forEach((b) => { b.onclick = () => saveMark(sid, b.dataset.evauto, null).then(again); });
+  bindComments(again);
   // programs of the quiz questions, programs of the student (blocks), each one running on its own micro:bit
   document.querySelectorAll('[data-evq]').forEach((div) => { const [cid, k] = div.dataset.evq.split(':'); const w = renderProgramInto(div, CHALLENGES.find((x) => x.id === cid).questions[Number(k)].code); if (w) EVW.ws.push(w); });
   document.querySelectorAll('[data-evp]').forEach((div) => {
@@ -643,11 +672,11 @@ function renderReview(k) {
     if (!c) return '<span class="muted">nothing submitted</span>';
     if (q) {
       const given = ((c.program && c.program.answers) || [])[it.q];
-      if (q.open) return openAnswerHtml(q, given, false) + aiBox(r, it.key, sheetItem);
+      if (q.open) return openAnswerHtml(q, given, false) + aiBox(r, it.key, sheetItem) + commentBox(r, it.key, sheetItem);
       const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
       return picked || '<span class="muted">no answer</span>';
     }
-    return `<div class="rv-prog" data-sid="${esc(r.studentId)}"></div>${aiBox(r, it.chId, sheetItem)}<div class="muted">Automatic check: ${c.score} %${X.verified[r.studentId + ':' + it.chId] !== undefined ? ' (replayed)' : ''} · <button class="linklike" data-exview="${esc(r.studentId)}:${esc(it.chId)}">▶ open with the micro:bit</button></div>`;
+    return `<div class="rv-prog" data-sid="${esc(r.studentId)}"></div>${aiBox(r, it.chId, sheetItem)}${commentBox(r, it.key, sheetItem)}<div class="muted">Automatic check: ${c.score} %${X.verified[r.studentId + ':' + it.chId] !== undefined ? ' (replayed)' : ''} · <button class="linklike" data-exview="${esc(r.studentId)}:${esc(it.chId)}">▶ open with the micro:bit</button></div>`;
   };
   openModal(`<div class="actions"><button id="rvBack">← Results</button><span style="flex:1"></span>
       <button id="rvPrev"${k ? '' : ' disabled'}>← Previous</button><b>${k + 1} / ${items.length}</b><button id="rvNext"${k < items.length - 1 ? '' : ' disabled'}>Next →</button></div>
@@ -682,6 +711,7 @@ function renderReview(k) {
     };
   });
   document.querySelectorAll('[data-auto]').forEach((b) => { b.onclick = () => save(b.dataset.auto, null).then(() => renderReview(k)); });
+  bindComments(() => renderReview(k));
 }
 async function verifyExam() {
   const e = X.exam, todo = [];
