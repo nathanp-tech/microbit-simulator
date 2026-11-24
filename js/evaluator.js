@@ -168,7 +168,13 @@ function markSheet(challengeIds, res) {
   const items = examItems(challengeIds).map((it) => {
     const c = chs[it.chId];
     let auto = 0;
-    if (c && it.q === null) auto = halfMark((Number(c.score) || 0) / 100 * it.max);
+    // a program: the AI mark when there is one (it read the program and the checks), else the score of the checks
+    let tests = null, ai = null;
+    if (c && it.q === null) {
+      auto = tests = halfMark((Number(c.score) || 0) / 100 * it.max);
+      const a = res && res.ai && res.ai[it.chId];
+      if (a && typeof a.mark === 'number') auto = ai = Math.max(0, Math.min(it.max, halfMark(a.mark)));
+    }
     if (c && it.q !== null) {
       const ch = CHALLENGES.find((x) => x.id === it.chId);
       const answers = (c.program && c.program.answers) || [];
@@ -176,7 +182,7 @@ function markSheet(challengeIds, res) {
       auto = halfMark(g.criteria[it.q].points * it.max);
     }
     const has = Object.prototype.hasOwnProperty.call(over, it.key) && over[it.key] !== null;
-    return { ...it, submitted: !!c, auto, mark: has ? Number(over[it.key]) : auto, changed: has };
+    return { ...it, submitted: !!c, auto, tests, ai, mark: has ? Number(over[it.key]) : auto, changed: has };
   });
   const total = items.reduce((a, i) => a + i.mark, 0), max = items.reduce((a, i) => a + i.max, 0);
   const pct = max ? Math.round(total / max * 100) : 0;

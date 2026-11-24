@@ -264,6 +264,71 @@ function examRows() {
   return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((r) => ({ r, sheet: markSheet(e.challenges, verifiedResult(r)), g7: r.studentId ? g7[r.studentId] : undefined }));
 }
 const fmtMark = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+// what the AI said about one program: its mark, the comment the student will see, the note for the teacher
+function aiBox(r, cid, it) {
+  const a = r && r.ai && r.ai[cid];
+  if (!a) return '';
+  const stale = ((r.challenges || {})[cid] || {}).at > a.at;
+  return `<div class="ai-note">🤖 <b>AI: ${fmtMark(it.ai)} / ${fmtMark(it.max)}</b> <span class="muted">(automatic checks: ${fmtMark(it.tests)})</span>${stale ? ' <b>⚠ the program changed after: mark it again</b>' : ''}
+    <div>💬 <i>For the student:</i> ${esc(a.feedback)}</div><div>📝 <i>Why:</i> ${esc(a.teacherNote)}</div></div>`;
+}
+// the text of a challenge for the AI (no pictures)
+function taskText(ch) {
+  const d = String(ch.description || '').replace(/\[\[btn:(\w+)\]\]/g, 'button $1').replace(/\[\[icon:(\w+)\]\]/g, '(icon $1)').replace(/\[\[text:([^\]]*)\]\]/g, '"$1"')
+    .replace(/\[\[img:([^\]]*)\]\]/g, '(LED picture $1)').replace(/\[\[shake\]\]/g, 'shake').replace(/\[\[leds:(\w+)\]\]/g, '(LEDs $1)')
+    .replace(/<li>/g, '\n- ').replace(/<\/?(ul|p)\b[^>]*>/g, '\n').replace(/<br>/g, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+  return `${ch.title}\n${d.trim()}\nBlocks to use: ${ch.skills || ''}`;
+}
+// 🤖 AI marking: each program handed in (not marked yet, or changed since) → OpenAI (key on the server) → the AI mark
+async function aiMarkExam() {
+  const e = X.exam, over = e.stoppedAt || X.now > e.endsAt;
+  const todo = [];
+  for (const r of X.results) {
+    if (!r.studentId || !(r.finishedAt || over)) continue;
+    for (const cid of e.challenges) {
+      const ch = CHALLENGES.find((c) => c.id === cid), c = (r.challenges || {})[cid];
+      if (!ch || ch.quiz || !c || !c.program) continue;
+      const a = r.ai && r.ai[cid];
+      if (!a || c.at > a.at) todo.push([r, ch, c]);
+    }
+  }
+  if (!todo.length) { $('exMsg').textContent = '🤖 Every program handed in is already marked by the AI.'; return; }
+  if (!confirm(`Mark ${todo.length} program${todo.length > 1 ? 's' : ''} with the AI (OpenAI ${'gpt-4o'})?\n\nOnly the programs of students who handed in the test${over ? ' (the test is over: everybody)' : ''}. The AI mark replaces the automatic mark; the marks you changed stay. Each student will also see a short comment in their correction.`)) return;
+  let sols = {};
+  try { sols = (await (await tfetch('api/solutions')).json()).solutions || {}; } catch (err) { /* the solutions of the challenges */ }
+  const solText = {};
+  const solOf = (ch) => {
+    if (!(ch.id in solText)) {
+      const p = ((sols[ch.id] || [])[0] || {}).program || ch.solution;
+      try { solText[ch.id] = p ? programFromState(p).ts : ''; } catch (err) { solText[ch.id] = ''; }
+    }
+    return solText[ch.id];
+  };
+  let done = 0, failed = null;
+  const one = async ([r, ch, c]) => {
+    let code = '', checks = '';
+    try {
+      const prog = programFromState(c.program);
+      code = prog.ts;
+      const res = evaluateChallenge(ch, prog);
+      checks = `Score of the checks: ${res.score} %\n` + res.criteria.map((k) => `${k.ok ? 'OK ' : k.points ? 'PART ' : 'NO '} ${k.label}${k.max ? ` (${k.points}/${k.max})` : ''}`).join('\n');
+    } catch (err) { checks = 'The program cannot run: ' + err.message; }
+    const d = await tpost('api/exam/ai', { examId: e.id, studentId: r.studentId, challengeId: ch.id, max: chMarks(ch), task: taskText(ch), code, solution: solOf(ch), checks });
+    (r.ai || (r.ai = {}))[ch.id] = d.ai;
+    $('exMsg').textContent = `🤖 AI marking ${++done} / ${todo.length}…`;
+  };
+  $('exMsg').textContent = `🤖 AI marking 0 / ${todo.length}…`;
+  const queue = todo.slice();
+  await Promise.all([0, 1, 2].map(async () => {
+    while (queue.length && !failed) {
+      const job = queue.shift();
+      try { await one(job); } catch (err) { failed = err.message; }
+    }
+  }));
+  renderExamResults();
+  refreshGrades(true);
+  $('exMsg').textContent = failed ? `⚠ ${done} / ${todo.length} marked. Stopped: ${failed}` : `✓ ${done} program${done > 1 ? 's' : ''} marked by the AI: check them (✏️ Mark question by question), then share the corrections.`;
+}
 // the work of one student in one test, to open it in the student view (program and board, or the quiz answers)
 function examWork(r, cid) {
   const e = X.exam, c = (r.challenges || {})[cid] || {};
@@ -280,13 +345,14 @@ function renderExamResults() {
   const hist = [1, 2, 3, 4, 5, 6, 7].map((g) => graded.filter((x) => x.g7 === g).length), hmax = Math.max(1, ...hist);
   const avgMarks = graded.length ? graded.reduce((a, x) => a + x.sheet.total, 0) / graded.length : 0;
   openModal(`<h2>📝 ${esc(e.title)} · ${esc(e.className)}</h2>
-    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min · ${running ? '⏱ still running' : 'finished'} · marks given automatically (✎ = changed by you).</p>
+    <p class="muted">${new Date(e.startedAt * 1000).toLocaleString()} · ${e.minutes} min · ${running ? '⏱ still running' : 'finished'} · marks given automatically (🤖 purple = AI mark, ✎ = changed by you).</p>
     <div class="curve-box"><div><b>Grade out of 7: a bell curve for the class</b><div class="muted">Each total is placed against the class (class average ${fmtMark(Math.round(avgMarks * 10) / 10)} / ${fmtMark(max)} marks), then on a curve of:</div>
         <label>average grade <input type="number" id="cvMean" min="1" max="7" step="0.1" value="${curve.mean}" style="width:64px"></label>
         <label>spread <input type="number" id="cvSd" min="0" max="3" step="0.1" value="${curve.sd}" style="width:64px"></label>
         <button class="mini" id="cvReset" title="Average 4.5, spread 1.2">Default</button><span id="cvMsg" class="muted"></span></div>
       <div class="hist">${hist.map((n, i) => `<div class="hbar"><span class="hn">${n || ''}</span><div style="height:${Math.round(n / hmax * 60)}px"></div><b>${i + 1}</b></div>`).join('')}</div></div>
     <div class="actions"><button class="primary" id="exReview" title="Go through the questions one by one and change the marks">✏️ Mark question by question</button>
+      <button id="exAi" title="After the test: the AI (OpenAI) reads each program handed in and gives a mark and a short comment for the student. You check and change them before sharing">🤖 AI marking</button>
       <button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying</button>
       <button id="exShare" title="Mark the test first. Then: a text to copy with the link of each student's correction (no password needed)">🔗 Correction links${e.shared ? ' ✓' : ''}</button>
       <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
@@ -294,7 +360,7 @@ function renderExamResults() {
     <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade<br><span class="muted">/7</span></th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
     ${rows.map(({ r, sheet, g7 }) => `<tr${r.missing ? ' class="absent"' : ''}><td><button class="linklike" data-exstudent="${esc(r.studentId || 'name:' + r.name)}" title="See the whole exam of this student"><b>${esc(r.name)}</b></button>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
       ${sheet.items.map((it) => (r.missing ? '<td class="muted">—</td>'
-    : `<td><input type="number" class="cell-mark${it.changed ? ' mark-changed' : ''}${!it.submitted && !it.changed ? ' empty' : ''}" data-sid="${esc(r.studentId)}" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : it.submitted ? 'Automatic mark: type another one to change it' : 'Nothing submitted'}"></td>`)).join('')}
+    : `<td><input type="number" class="cell-mark${it.changed ? ' mark-changed' : it.ai !== null ? ' ai-mark' : ''}${!it.submitted && !it.changed ? ' empty' : ''}" data-sid="${esc(r.studentId)}" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : it.ai !== null ? `AI mark (automatic checks: ${fmtMark(it.tests)}): type another one to change it` : it.submitted ? 'Automatic mark: type another one to change it' : 'Nothing submitted'}"></td>`)).join('')}
       <td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b>${fmtMark(sheet.total)}</b></button>`}</td><td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b class="grade">${g7 === undefined ? '—' : g7}</b></button>`}</td>
       <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
       <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table></div>`);
@@ -320,6 +386,7 @@ function renderExamResults() {
     a.click();
   };
   $('exVerify').onclick = verifyExam;
+  $('exAi').onclick = () => (X.fromFile ? alert('Opened from a backup file: the AI marking needs the database.') : aiMarkExam());
   $('exShare').onclick = () => (X.fromFile ? alert('Opened from a backup file: the correction links need the database.') : shareCorrections());
   document.querySelectorAll('[data-exview]').forEach((b) => {
     b.onclick = () => { const [sid, cid] = b.dataset.exview.split(':'); examViewer(sid, Math.max(0, e.challenges.indexOf(cid))); };
@@ -396,7 +463,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
   if (idx < 0) return back();
   const { r, sheet, g7 } = list[idx];
   const partMarks = (id) => { const its = sheet.items.filter((it) => it.chId === id); return { got: its.reduce((a, it) => a + it.mark, 0), max: its.reduce((a, it) => a + it.max, 0), sent: its.some((it) => it.submitted), changed: its.some((it) => it.changed) }; };
-  const markRow = (it) => `<div class="ev-mark"><span>Automatic: <b>${fmtMark(it.auto)}</b> / ${fmtMark(it.max)}</span>
+  const markRow = (it) => `<div class="ev-mark"><span>${it.ai !== null && it.ai !== undefined ? '🤖 AI' : 'Automatic'}: <b>${fmtMark(it.auto)}</b> / ${fmtMark(it.max)}</span>
       <label>Mark <input type="number" class="ev-in" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}"> / ${fmtMark(it.max)}</label>
       ${it.changed ? `<button class="mini" data-evauto="${esc(it.key)}" title="Back to the automatic mark">↺ auto</button> <span class="mark-changed">✎ changed by you</span>` : ''}</div>`;
   const section = (cid, i) => {
@@ -418,7 +485,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
         <div class="ev-right"><div class="mc-boards ev-board" data-evb="${esc(cid)}" style="padding:0"></div>
           <div class="actions"><button class="mini" data-evrun="${esc(cid)}" title="Start their program again">↻ Restart</button><span class="muted">${c.checks || 1} submission${(c.checks || 1) > 1 ? 's' : ''}${c.at ? ' · last ' + new Date(c.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
           <div class="ev-crit" data-evc="${esc(cid)}"></div></div></div>` : '<p class="ev-empty">Nothing submitted for this part.</p>'}
-      ${markRow(it)}</section>`;
+      ${aiBox(r, cid, it)}${markRow(it)}</section>`;
   };
   const nav = e.challenges.map((cid, i) => { const ch = CHALLENGES.find((k) => k.id === cid), m = partMarks(cid); return `<a href="#ev-${i}" data-evgo="${i}">${ch ? (ch.quiz ? 'Quiz' : esc(ch.title)) : esc(cid)} <b>${m.sent || m.changed ? fmtMark(m.got) : '—'}/${fmtMark(m.max)}</b></a>`; }).join('');
   openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
@@ -516,7 +583,7 @@ function renderReview(k) {
       const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
       return picked || '<span class="muted">no answer</span>';
     }
-    return `<div class="rv-prog" data-sid="${esc(r.studentId)}"></div><div class="muted">Automatic check: ${c.score} %${X.verified[r.studentId + ':' + it.chId] !== undefined ? ' (replayed)' : ''} · <button class="linklike" data-exview="${esc(r.studentId)}:${esc(it.chId)}">▶ open with the micro:bit</button></div>`;
+    return `<div class="rv-prog" data-sid="${esc(r.studentId)}"></div>${aiBox(r, it.chId, sheetItem)}<div class="muted">Automatic check: ${c.score} %${X.verified[r.studentId + ':' + it.chId] !== undefined ? ' (replayed)' : ''} · <button class="linklike" data-exview="${esc(r.studentId)}:${esc(it.chId)}">▶ open with the micro:bit</button></div>`;
   };
   openModal(`<div class="actions"><button id="rvBack">← Results</button><span style="flex:1"></span>
       <button id="rvPrev"${k ? '' : ' disabled'}>← Previous</button><b>${k + 1} / ${items.length}</b><button id="rvNext"${k < items.length - 1 ? '' : ' disabled'}>Next →</button></div>

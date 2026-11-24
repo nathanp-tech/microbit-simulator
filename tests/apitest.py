@@ -6,7 +6,7 @@
 Uses its own student ids (prefix "apitest-") and removes them at the end. Do not run it against the class data:
 use MB_DATA_DIR (server.py) or tests/vercel_local.py.
 """
-import json, sys, time, urllib.error, urllib.request
+import json, os, sys, time, urllib.error, urllib.request
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:8765').rstrip('/')
 CODE = sys.argv[2] if len(sys.argv) > 2 else '123456'
@@ -137,6 +137,11 @@ s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c2#1', 'marks': 1.5}, teacher=True); check(s == 200 and r['marks'] == {'c2#1': 1.5}, 'teacher changes a mark')
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c2#1', 'marks': None}, teacher=True); check(s == 200 and r['marks'] == {}, 'back to the automatic mark')
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1', 'marks': 2.5}, teacher=True)
+AI = {'examId': eid, 'studentId': A, 'challengeId': 'c1', 'max': 4, 'task': 't', 'code': 'x', 'solution': 'y', 'checks': 'z'}
+s, r = call('POST', '/api/exam/ai', AI); check(s in (401, 403), 'a student cannot ask the AI marking')
+s, r = call('POST', '/api/exam/ai', {**AI, 'challengeId': 'c9'}, teacher=True); check(s == 404, 'AI marking: a part outside the exam refused')
+if not os.environ.get('MB_AI_MOCK'):
+    s, r = call('POST', '/api/exam/ai', AI, teacher=True); check(s == 503 and 'OPENAI_API_KEY' in r.get('error', ''), 'AI marking without a key: a clear message', r)
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1', 'marks': 'x'}, teacher=True); check(s == 400, 'bad mark refused')
 s, r = call('POST', '/api/exam/finish', {'studentId': B, 'examId': eid}, cls='Tech5ENd'); check(s == 404, 'finish refused for another class')
 s, r = call('POST', '/api/exam/finish', {'studentId': A, 'examId': eid, 'away': {'n': 2, 'ms': 15000}}); check(s == 200 and r.get('finishedAt'), 'student hands in the test')

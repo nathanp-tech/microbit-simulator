@@ -89,7 +89,7 @@ const openRight = (q, given) => typeof given === 'string' && !(q.reject || []).s
 const fmtHalf = (x) => (Math.round(x * 2) / 2).toString();
 // one part of a test. res: the check of the program, or the quiz graded (null: nothing submitted); marks: the marks given
 // (one per quiz question, or [mark] for a program), else the automatic marks.
-function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote, ownProgram, changed }) {
+function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote, ownProgram, changed, feedback }) {
   const max = chMarks(ch);
   let got = 0, body;
   if (ch.quiz) {
@@ -108,7 +108,7 @@ function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote,
     }).join('');
   } else {
     got = marks ? marks[0] : res ? halfMark(res.score / 100 * max) : 0;
-    body = `${res ? `<ul class="fb-crit">${res.criteria.filter((c) => c.max > 0 || !c.ok).map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>` : '<p class="muted">Nothing submitted.</p>'}
+    body = `${feedback ? `<div class="fb-ai">💬 <b>Comment on your program:</b> ${esc(feedback)}</div>` : ''}${res ? `<ul class="fb-crit">${res.criteria.filter((c) => c.max > 0 || !c.ok).map((c) => `<li class="${c.ok ? 'ok' : c.points > 0 ? 'part' : 'ko'}">${c.ok ? '✔' : c.points > 0 ? '◐' : '✖'} ${esc(c.label)}</li>`).join('')}</ul>` : '<p class="muted">Nothing submitted.</p>'}
       ${ownProgram && program ? `<h4 class="fb-h">🧑‍💻 Your program</h4><div class="fb-sol" data-fbown="${k}"></div>` : ''}
       ${hasSolution ? `<h4 class="fb-h">✏️ Correction: a program that works</h4><div class="fb-sol" data-fbsol="${k}"></div>${solutionNote ? `<p class="fb-why">💡 ${esc(solutionNote)}</p>` : ''}` : ''}`;
   }

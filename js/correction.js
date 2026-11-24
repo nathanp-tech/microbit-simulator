@@ -26,14 +26,14 @@ const keepWs = [];
     if (!c || !c.program) { checked[ch.id] = null; continue; }
     try { checked[ch.id] = ch.quiz ? gradeQuiz(ch, c.program.answers || []) : evaluateChallenge(ch, programFromState(c.program)); } catch (e) { checked[ch.id] = null; }
   }
-  const sheet = markSheet(exam.challenges, { challenges: Object.fromEntries(Object.entries(res.challenges).map(([id, c]) => [id, { ...c, score: checked[id] ? checked[id].score : c.score }])), marks: res.marks });
+  const sheet = markSheet(exam.challenges, { challenges: Object.fromEntries(Object.entries(res.challenges).map(([id, c]) => [id, { ...c, score: checked[id] ? checked[id].score : c.score }])), marks: res.marks, ai: res.ai });
   const parts = chs.map((ch, k) => {
     const c = res.challenges[ch.id], program = c ? c.program : null;
     const its = sheet.items.filter((it) => it.chId === ch.id), marks = its.map((it) => it.mark);
     const solution = (d.solutions || {})[ch.id] || ch.solution || null;
     owns.push(program && !ch.quiz ? program : null);
     sols.push(solution);
-    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto) });
+    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto), feedback: ((res.ai || {})[ch.id] || {}).feedback });
   });
   const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   root.innerHTML = `<div class="corr-head"><h1>✏️ My correction · ${esc(exam.title)}</h1>

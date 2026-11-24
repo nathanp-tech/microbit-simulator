@@ -23,7 +23,7 @@ Keys (prefix mb:):
   archive:NAME           copy of everything before a delete / reset (180 days)
   stats:YYYY-MM   hash   day -> number of database commands (quota gauge, online only)
 """
-import base64, hashlib, hmac, json, os, random, re, threading, time, unicodedata, urllib.parse, urllib.request, zlib
+import base64, hashlib, hmac, json, os, random, re, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zlib
 
 P = 'mb:'
 ID = re.compile(r'[\w-]{4,64}')
@@ -309,6 +309,76 @@ def validated_count(s):
     return sum(1 for c in (s.get('challenges') or {}).values() if c.get('status') == 'validated')
 
 
+# ---------- AI marking (OpenAI, like the bookshop app: key in the environment, Responses API, Structured Outputs) ----------
+AI_MODEL = os.environ.get('OPENAI_MODEL') or 'gpt-4o'
+AI_SCHEMA = {
+    'type': 'object', 'additionalProperties': False, 'required': ['mark', 'feedback', 'teacherNote'],
+    'properties': {
+        'mark': {'type': 'number', 'description': 'The mark, from 0 to the maximum, in half marks'},
+        'feedback': {'type': 'string', 'description': 'For the student: 1 to 3 short, simple sentences'},
+        'teacherNote': {'type': 'string', 'description': 'For the teacher: why this mark'},
+    },
+}
+AI_PROMPT = '\n'.join([
+    'You mark one program of a test for students aged 13-14 (beginners), written with the MakeCode blocks of the BBC micro:bit.',
+    'You get: the task, the marks, a program that works (one way among many), the student program (MakeCode JavaScript made',
+    'from their blocks; only the blocks that run are in it) and the results of automatic checks run on a micro:bit simulator.',
+    '',
+    'RULES',
+    '1. Mark what the program DOES, not how it is written. Any way that does the task gets full marks: other blocks, other',
+    '   order, if / else or several ifs, a word before the number, a pause or a clear screen after, a forever that checks a',
+    '   button, variables named differently… Never compare line by line with the program that works.',
+    '2. The automatic checks really ran the program: trust them for what it shows. But they can be too strict (for example',
+    '   a program that shows the right thing in another way): then use your own reading of the code and say so.',
+    '3. Partial marks: give marks for each part of the task that works or is nearly right (a small slip, a wrong limit).',
+    '   A program that does nothing of the task gets 0. Marks are in half marks, from 0 to the maximum.',
+    '4. Do not take marks away for style, extra blocks or extra things shown, unless they stop the task from working.',
+    '5. feedback: written TO the student, in simple English (level A2), 1 to 3 short sentences: what works, and what to',
+    '   change if something does not. Kind and precise, with the names of the blocks. Never give the mark in it.',
+    '6. teacherNote: for the teacher, 1 to 4 sentences: why this mark, and anything to check by hand.',
+])
+
+
+class AIError(Exception):
+    pass
+
+
+def ai_mark(task, max_marks, code, solution, checks):
+    """One OpenAI call (Responses API, temperature 0, strict JSON schema). Returns {mark, feedback, teacherNote}."""
+    key = os.environ.get('OPENAI_API_KEY')
+    if not key:
+        raise AIError('OPENAI_API_KEY is missing: add it in Vercel (Settings → Environment Variables), then redeploy.')
+    user = (f'TASK ({fmt_num(max_marks)} marks)\n{task}\n\nA PROGRAM THAT WORKS\n{solution or "(none)"}\n\n'
+            f'STUDENT PROGRAM\n{code or "(empty: no blocks that run)"}\n\nAUTOMATIC CHECKS\n{checks or "(none)"}')
+    body = {'model': AI_MODEL, 'temperature': 0, 'input': [{'role': 'system', 'content': AI_PROMPT}, {'role': 'user', 'content': user}],
+            'text': {'format': {'type': 'json_schema', 'name': 'microbit_mark', 'strict': True, 'schema': AI_SCHEMA}}}
+    base = (os.environ.get('OPENAI_BASE_URL') or 'https://api.openai.com/v1').rstrip('/')  # another address only for the tests
+    req = urllib.request.Request(base + '/responses', data=json.dumps(body).encode(), method='POST',
+                                 headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=50) as r:
+            d = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read()).get('error', {}).get('message', '')
+        except ValueError:
+            msg = ''
+        raise AIError(f'OpenAI error {e.code}: {msg[:200]}')
+    except (OSError, ValueError) as e:
+        raise AIError(f'OpenAI does not answer: {e}')
+    text = ''.join(c.get('text', '') for o in d.get('output') or [] if o.get('type') == 'message'
+                   for c in o.get('content') or [] if c.get('type') == 'output_text')
+    try:
+        out = json.loads(text)
+        return {'mark': float(out['mark']), 'feedback': str(out['feedback'])[:600], 'teacherNote': str(out['teacherNote'])[:800], 'model': d.get('model') or AI_MODEL}
+    except (ValueError, KeyError, TypeError):
+        raise AIError('The AI answer cannot be read.')
+
+
+def fmt_num(x):
+    return str(int(x)) if float(x).is_integer() else str(x)
+
+
 def clean_text(s, n=500):
     return str(s or '').strip()[:n]
 
@@ -538,7 +608,8 @@ class Api:
             sols = self.solutions()
             return 200, {'exam': {k: exam.get(k) for k in ('id', 'title', 'className', 'challenges', 'startedAt')},
                          'result': {'name': res.get('name'), 'marks': res.get('marks') or {},
-                                    'challenges': {c: {'score': v.get('score'), 'program': v.get('program')} for c, v in (res.get('challenges') or {}).items() if isinstance(v, dict)}},
+                                    'challenges': {c: {'score': v.get('score'), 'program': v.get('program')} for c, v in (res.get('challenges') or {}).items() if isinstance(v, dict)},
+                                    'ai': {c: {'mark': v.get('mark'), 'feedback': v.get('feedback')} for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)}},
                          'grade': (shared.get('grades') or {}).get(sid),
                          'solutions': {c: (sols.get(c) or [{}])[0].get('program') for c in exam.get('challenges', []) if sols.get(c)}}
         g = self.grant(ctx, params)
@@ -951,6 +1022,29 @@ class Api:
             res['markedAt'] = time.time()
             self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
             return 200, {'ok': True, 'marks': marks}
+        if path == '/api/exam/ai':
+            # AI marking of one program of one student (after the test): the teacher's page sends the task, the student's
+            # program (MakeCode JavaScript), a program that works and the automatic checks; the mark is saved as the
+            # suggested mark (the teacher reviews it, and can change it, before sharing the corrections).
+            eid, sid, cid = str(data.get('examId', '')), str(data.get('studentId', '')), str(data.get('challengeId', ''))
+            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not SLOT.fullmatch(cid):
+                return 400, {'error': 'bad request'}
+            raw = self.r(['HGET', P + 'exams', eid], ['HGET', P + 'examres:' + eid, sid])
+            exam, res = jload(raw[0]), jload(raw[1], {}) or {}
+            if not exam or cid not in exam.get('challenges', []) or not (res.get('challenges') or {}).get(cid):
+                return 404, {'error': 'no such program'}
+            try:
+                mx = float(data.get('max') or 0)
+                out = ai_mark(clean_text(data.get('task'), 3000), mx, clean_text(data.get('code'), 8000),
+                              clean_text(data.get('solution'), 4000), clean_text(data.get('checks'), 3000))
+            except AIError as err:
+                return 503, {'error': str(err)}
+            out['mark'] = max(0.0, min(mx, round(float(out['mark']) * 2) / 2))
+            out['at'] = time.time()
+            res = jload(self.r(['HGET', P + 'examres:' + eid, sid])[0], {}) or res  # read again: a mark may have changed meanwhile
+            res.setdefault('ai', {})[cid] = out
+            self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
+            return 200, {'ok': True, 'ai': out}
         if path == '/api/exam':
             action = data.get('action')
             if action == 'start':
