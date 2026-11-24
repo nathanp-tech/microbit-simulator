@@ -25,6 +25,22 @@ class Tester {
     }
     return this;
   }
+  // the last time something was shown (a new picture, or a show block run)
+  lastShown() { const f = this.mb.frames, l = this.mb.log; return Math.max(f.length ? f[f.length - 1].t : 0, l.length ? l[l.length - 1].t : 0); }
+  // waits until the board has finished showing things (nothing new for quietMs), at most maxMs: a word that scrolls
+  // before the number, a pause then clear screen… are all waited for, whatever the way the program is written
+  settle(quietMs = 1000, maxMs = 10000) {
+    const end = this.mb.now + maxMs;
+    while (this.mb.now < end && !this.timedOut) {
+      this.wait(200);
+      if (this.mb.now - this.lastShown() >= quietMs && !this.busy()) break;
+    }
+    return this;
+  }
+  // "on start" or a button / shake handler is still running (a pause before the clear screen…)
+  busy() { return !this.mb.mainDone || Object.values(this.mb.handlers || {}).some((h) => h.running || h.queue.length); }
+  // the last picture shown after t0 (from the show blocks, even if the screen was cleared after)
+  lastImage(t0 = 0, t1 = Infinity) { const im = this.images(t0, t1); return im.length ? im[im.length - 1] : null; }
   click(b, after = 0) { this.mb.buttonDown(b); this.wait(100); this.mb.buttonUp(b); return this.wait(after); }
   shake(after = 0) { this.mb.doGesture('Shake'); return this.wait(after); }
   gesture(g, after = 0) { this.mb.doGesture(g); return this.wait(after); }

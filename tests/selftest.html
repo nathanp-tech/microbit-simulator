@@ -75,6 +75,11 @@
       const r = evaluateChallenge(CHALLENGES.find((c) => c.id === id), programFromState(program));
       say(r.score === want, `${id} · ${title}: ${r.score} % (expected ${want} %)`);
     }
+    for (const [id, title, program] of (typeof WORKS !== 'undefined' ? WORKS : [])) {
+      const t = performance.now();
+      const r = evaluateChallenge(CHALLENGES.find((c) => c.id === id), programFromState(program));
+      say(r.score === 100, `${id} · ✓ works: ${title}: ${r.score} % (${Math.round(performance.now() - t)} ms)${r.score < 100 ? ' · ' + r.criteria.filter((c) => !c.ok).map((c) => c.label + ' ' + c.points + '/' + c.max).join(' ; ') : ''}`);
+    }
     for (const [name, fn] of ENGINE_TESTS) {
       try { const r = fn(); say(r === true, `engine · ${name}${r === true ? '' : ': ' + r}`); } catch (err) { say(false, `engine · ${name}: ${err.message}`); }
     }

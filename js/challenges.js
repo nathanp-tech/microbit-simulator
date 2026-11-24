@@ -148,21 +148,29 @@ function reactionRound(T, reaction) {
 }
 // Nothing new on the screen for 3 s while nobody presses or shakes (after a long enough start)
 const stillWithoutInput = (make) => {
-  const T = make(5).wait(12000); const t0 = T.t; T.wait(3000);
+  const T = make(5).wait(1000).settle(1500, 40000); const t0 = T.t; T.wait(3000); // after a welcome message, however long
   // a new picture, or a show block run again (a forever that shows the same number: the screen does not change)
   return !T.frames(t0).some((f) => f.t > t0) && !T.log(t0).some((e) => e.t > t0 && e.kind !== 'clear');
 };
+// the program has started and finished its "on start" (a welcome message, however long)
+const ready = (make, seed) => make(seed).wait(1000).settle(1000, 30000);
+// press / shake, then wait until the board has shown everything (a word before the number, a pause then clear…)
+const press = (T, b) => { const t0 = T.t; T.click(b); T.settle(1000, 10000); return t0; };
+const shakeNow = (T) => { const t0 = T.t; T.shake(); T.settle(1000, 10000); return t0; };
+const lastNumber = (nums) => (nums.length ? nums[nums.length - 1] : null);
 const near = (nums, target, tol) => nums.some((n) => Math.abs(n - target) <= tol);
 // show icon pauses 600 ms: a program that sets start after the heart measures 600 ms less (both are right)
 const nearReaction = (nums, r) => near(nums, r + 50, 200) || near(nums, r - 550, 200); // +100 ms: B counts when it is released
 
 // a button of "Happy and sad": the right face → all; another picture (a face drawn with show leds…) → half; the other face → 0
-function faceRound(make, btn, face, other) {
-  const T = make().wait(6000); const t0 = T.t; T.click(btn).wait(1500);
-  if (T.sawPattern(other, t0)) return 0;
-  if (T.sawPattern(face, t0)) return 1;
+function faceRound(make, btn, face, other) { const T = ready(make); return faceScore(T, press(T, btn), face, other); }
+function faceScore(T, t0, face, other) {
+  const last = T.lastImage(t0);
+  if (last === patternKey(other) || (!last && T.sawPattern(other, t0))) return 0;
+  if (last === patternKey(face) || (!last && T.sawPattern(face, t0))) return 1;
   return reacted(T, t0).length ? { part: 0.5, detail: 'not the right face' } : 0;
 }
+const partOf = (r) => (typeof r === 'number' ? r : r.part || 0);
 // Dice faces: one LED = one dot
 const DICE_FACES = ['..... ..... ..#.. ..... .....', '#.... ..... ..... ..... ....#', '#.... ..... ..#.. ..... ....#',
   '#...# ..... ..... ..... #...#', '#...# ..... ..#.. ..... #...#', '#...# ..... #...# ..... #...#'];
@@ -217,6 +225,13 @@ const QB = (() => {
 })();
 // what a "forever" program shows last once a sensor is set (compass letter, light level…)
 function compassRound(make, heading) { return sensorRound(make, (T) => T.setHeading(heading)); }
+// what a "forever" program shows once a sensor is set: the last number shown ("3", "LEVEL 3"…). The number still on the
+// screen counts too (a program that shows it again only when it changes).
+function levelRound(make, set) {
+  const T = make().wait(1000); set(T); const t0 = T.t; T.wait(10000);
+  const after = T.numbers(t0 + 1);
+  return after.length ? lastNumber(after) : lastNumber(T.numbers(0, t0));
+}
 function sensorRound(make, set) {
   const T = make().wait(1000); set(T); const t0 = T.t; T.wait(3000);
   const t = T.texts(t0).map((x) => x.trim().toUpperCase()).filter(Boolean);
@@ -249,8 +264,10 @@ const CHALLENGES = [
       { label: 'Button A shows the happy face', points: 40, run: (make) => faceRound(make, 'A', ICONS.Happy, ICONS.Sad) },
       { label: 'Button B shows the sad face', points: 40, run: (make) => faceRound(make, 'B', ICONS.Sad, ICONS.Happy) },
       { label: 'The buttons work again and again', points: 20, run: (make) => {
-        const T = make().wait(6000); T.click('A', 1200); T.click('B', 1200); const t0 = T.t; T.click('A').wait(1500);
-        return T.screen() === patternKey(ICONS.Happy); // after A, B, A: the happy face is on the screen
+        // A, then B, then A again: the B and the second A must still show the right face
+        const T = ready(make); press(T, 'A'); const tb = press(T, 'B'); const sb = faceScore(T, tb, ICONS.Sad, ICONS.Happy);
+        const sa = faceScore(T, press(T, 'A'), ICONS.Happy, ICONS.Sad);
+        return (partOf(sb) + partOf(sa)) / 2;
       } },
     ],
   },
@@ -262,7 +279,7 @@ const CHALLENGES = [
     hints: ['Variables → Make a Variable… → choice. Then "set choice to pick random 0 to 2" inside "on shake".', 'Logic → "if then else", click ⊕ to add "else if". Compare with "choice = 0" and "choice = 1".'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
-      const shakes = (make) => { const T = make(11).wait(3000); const out = []; for (let i = 0; i < 45; i++) { const t0 = T.t; T.shake(1500); const r = reacted(T, t0).filter((x) => !/^text:-?\d+(\.\d+)?$/.test(x)); out.push(r.length ? r[r.length - 1] : null); } return out; }; // a number (show number choice) is not a picture
+      const shakes = (make) => { const T = ready(make, 11); const out = []; for (let i = 0; i < 45; i++) { const t0 = shakeNow(T); const r = reacted(T, t0).filter((x) => !/^text:-?\d+(\.\d+)?$/.test(x)); out.push(r.length ? r[r.length - 1] : null); } return out; }; // a number (show number choice) is not a picture
       return [
         { label: 'A picture appears after every shake', points: 30, run: (make) => { const s = shakes(make); return s.filter(Boolean).length / s.length >= 0.95 ? 1 : 0.5 * s.filter(Boolean).length / s.length; } },
         { label: 'Three different pictures can appear (rock, paper, scissors)', points: 40, run: (make) => { const d = distinct(shakes(make).filter(Boolean)).length; return d === 3 ? 1 : d === 2 ? 0.4 : d > 3 ? 0.5 : 0; } },
@@ -278,8 +295,8 @@ const CHALLENGES = [
     hints: ['Put "show number" inside "on button A pressed".', 'Drag "sound level" (Input) into the show number block.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed', quietPart: 0.5,
     tests: [
-      { label: 'A shows the sound level (quiet: 40)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(40); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(40); } },
-      { label: 'A shows the sound level (loud: 180)', points: 50, run: (make) => { const T = make().wait(1500); T.setSound(180); const t0 = T.t; T.click('A').wait(3000); return T.numbers(t0).includes(180); } },
+      { label: 'A shows the sound level (quiet: 40)', points: 50, run: (make) => { const T = ready(make); T.setSound(40); const t0 = press(T, 'A'); return T.numbers(t0).includes(40); } },
+      { label: 'A shows the sound level (loud: 180)', points: 50, run: (make) => { const T = ready(make); T.setSound(180); const t0 = press(T, 'A'); return T.numbers(t0).includes(180); } },
     ],
   },
   // ---------------- 📝 Test ----------------
@@ -307,8 +324,8 @@ const CHALLENGES = [
     hints: ['Put "show number" inside "on button B pressed".', 'Drag "temperature (°C)" (Input) into the show number block.'],
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed', quietPart: 0.5,
     tests: [
-      { label: 'B shows the temperature (18 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(18); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(18); } },
-      { label: 'B shows the temperature (31 °C)', points: 50, run: (make) => { const T = make().wait(1500); T.setTemp(31); const t0 = T.t; T.click('B').wait(3000); return T.numbers(t0).includes(31); } },
+      { label: 'B shows the temperature (18 °C)', points: 50, run: (make) => { const T = ready(make); T.setTemp(18); const t0 = press(T, 'B'); return T.numbers(t0).includes(18); } },
+      { label: 'B shows the temperature (31 °C)', points: 50, run: (make) => { const T = ready(make); T.setTemp(31); const t0 = press(T, 'B'); return T.numbers(t0).includes(31); } },
     ],
   },
   {
@@ -319,7 +336,7 @@ const CHALLENGES = [
     quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until you shake',
     tests: (() => {
       // what is on the screen after each shake: the number of lit LEDs (the dots)
-      const rolls = (make) => { const T = make(7).wait(3000); const out = []; for (let i = 0; i < 60; i++) { const t0 = T.t; T.shake(1500); out.push(T.images(t0).length ? T.litCount() : 0); } return out; };
+      const rolls = (make) => { const T = ready(make, 7); const out = []; for (let i = 0; i < 60; i++) { const im = T.lastImage(shakeNow(T)); out.push(im ? im.split('1').length - 1 : 0); } return out; };
       return [
         { label: 'Dots appear after every shake', points: 30, run: (make) => { const r = rolls(make); const k = r.filter((n) => n > 0).length / r.length; return k >= 0.95 ? 1 : k * 0.8; } },
         { label: 'Always 1 to 6 dots', points: 35, run: (make) => { const r = rolls(make); return r.some((n) => n > 0) && r.every((n) => n >= 1 && n <= 6); } },
@@ -333,11 +350,11 @@ const CHALLENGES = [
     skills: 'forever, light level, if / else if, comparison',
     hints: ['forever → if (light level < 64) then show number 1, else if (light level < 128) then show number 2…', 'Click ⊕ on the if block to add the "else if" parts. The last part (else) shows 4.'],
     tests: [
-      { label: 'Light 10 shows 1', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(10)) === '1' },
-      { label: 'Light 90 shows 2', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(90)) === '2' },
-      { label: 'Light 160 shows 3', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(160)) === '3' },
-      { label: 'Light 240 shows 4', points: 20, run: (make) => sensorRound(make, (T) => T.setLight(240)) === '4' },
-      { label: 'Right at the limits (63 → 1, 64 → 2, 191 → 3, 192 → 4)', points: 20, run: (make) => [[63, '1'], [64, '2'], [191, '3'], [192, '4']].filter(([v, n]) => sensorRound(make, (T) => T.setLight(v)) === n).length / 4 },
+      { label: 'Light 10 shows 1', points: 20, run: (make) => levelRound(make, (T) => T.setLight(10)) === 1 },
+      { label: 'Light 90 shows 2', points: 20, run: (make) => levelRound(make, (T) => T.setLight(90)) === 2 },
+      { label: 'Light 160 shows 3', points: 20, run: (make) => levelRound(make, (T) => T.setLight(160)) === 3 },
+      { label: 'Light 240 shows 4', points: 20, run: (make) => levelRound(make, (T) => T.setLight(240)) === 4 },
+      { label: 'Right at the limits (63 → 1, 64 → 2, 191 → 3, 192 → 4)', points: 20, run: (make) => [[63, 1], [64, 2], [191, 3], [192, 4]].filter(([v, n]) => levelRound(make, (T) => T.setLight(v)) === n).length / 4 },
     ],
   },
   {
@@ -345,10 +362,9 @@ const CHALLENGES = [
     description: '<ul class="steps"><li>The score starts at <b>0</b></li><li>Press [[btn:A]] → the score goes <b>up by 1</b> and is shown</li><li>Press [[btn:B]] → the score goes <b>down by 1</b> and is shown</li></ul><p class="test-it">🧪 <b>Test it:</b> A, A, A shows 1, 2, 3. Then B shows 2.</p>',
     skills: 'variables, change by, on button A / B pressed',
     hints: ['Variables → Make a Variable… → score. "set score to 0" in "on start".', 'In "on button A pressed": change score by 1, then show number score. Same for B with -1.'],
-    quietCheck: stillWithoutInput, quietLabel: 'Nothing changes until a button is pressed',
     tests: (() => {
-      // the number shown after each press
-      const presses = (make, keys) => { const T = make().wait(1500); return keys.split('').map((k) => { const t0 = T.t; T.click(k, 2500); const n = T.numbers(t0); return n.length ? n[n.length - 1] : null; }); };
+      // the number shown after each press (also "SCORE 3", or a forever that shows the score all the time)
+      const presses = (make, keys) => { const T = ready(make); return keys.split('').map((k) => lastNumber(T.numbers(press(T, k)))); };
       return [
         { label: 'Starts at 0: the first A shows 1', points: 20, run: (make) => presses(make, 'A')[0] === 1 },
         { label: 'A goes up by 1 (A, A, A → 1, 2, 3)', points: 40, run: (make) => presses(make, 'AAA').join() === '1,2,3' },
@@ -361,10 +377,10 @@ const CHALLENGES = [
     description: '<ul class="steps"><li>The micro:bit <b>remembers the highest temperature</b> since the start</li><li>Press [[btn:A]] → show that <b>highest</b> temperature (°C), even if it is colder now</li></ul><p class="test-it">🧪 <b>Test it:</b> drag the thermometer up to 30, then down to 15. Press A: it must show 30.</p>',
     skills: 'variables, forever, if, comparison, temperature',
     hints: ['A variable "highest": set it to the temperature in "on start".', 'forever: if temperature > highest then set highest to temperature. On button A: show number highest.'],
-    quietCheck: stillWithoutInput, quietLabel: 'Nothing shows until A is pressed',
+    quietCheck: stillWithoutInput, quietLabel: 'Nothing shows until A is pressed', quietPart: 0.5,
     tests: (() => {
       // the temperatures one after the other (1.5 s each), then A: the number shown
-      const run = (make, temps) => { const T = make(); T.setTemp(temps[0]); T.wait(1500); for (const v of temps.slice(1)) { T.setTemp(v); T.wait(1500); } const t0 = T.t; T.click('A', 3000); return T.numbers(t0); };
+      const run = (make, temps) => { const T = make(); T.setTemp(temps[0]); T.wait(1000).settle(1000, 30000); for (const v of temps.slice(1)) { T.setTemp(v); T.wait(3000); } return T.numbers(press(T, 'A')); };
       return [
         { label: 'Nothing changed: A shows the temperature (21 °C)', points: 20, run: (make) => run(make, [21]).includes(21) },
         { label: 'It got warmer: A shows the new highest (29 °C)', points: 25, run: (make) => run(make, [21, 29]).includes(29) },
