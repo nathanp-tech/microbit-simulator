@@ -278,6 +278,21 @@ def norm(s):
     return ' '.join(''.join(c for c in s if not unicodedata.combining(c)).split()).casefold()
 
 
+# what the students may know of a test (never the grades, the shared corrections or the curve)
+EXAM_PUBLIC = ('id', 'className', 'title', 'challenges', 'minutes', 'hints', 'practice', 'startedAt', 'endsAt', 'stoppedAt', 'active')
+
+
+def public_exam(exam):
+    return {k: exam[k] for k in EXAM_PUBLIC if k in exam} if isinstance(exam, dict) else exam
+
+
+def public_ctl(ctl):
+    ctl = dict(ctl or {})
+    if ctl.get('exam'):
+        ctl['exam'] = public_exam(ctl['exam'])
+    return ctl
+
+
 def exam_parts(exams):
     # the tests of a student, without the programs (the progress dots of the live view): the 6 latest, per part:
     # c = times submitted, b = best score, p = something written (a program or quiz answers)
@@ -741,7 +756,7 @@ class Api:
             raw = self.r(['GET', P + 'st:' + sid], ['HGET', P + 'classctl', cls or '_none'])
             st = jload(raw[0], {}) or {}
             return 200, {'validated': st.get('validated', []), 'rev': st.get('rev', 0), 'deleted': bool(st.get('deleted')),
-                         'helpDone': st.get('helpDone', 0), 'notesRev': st.get('notesRev', 0), 'classctl': jload(raw[1], {}) or {}, 'now': time.time()}
+                         'helpDone': st.get('helpDone', 0), 'notesRev': st.get('notesRev', 0), 'classctl': public_ctl(jload(raw[1], {}) or {}), 'now': time.time()}
         m = re.fullmatch(r'/api/notes/([\w-]+)', path)
         if m:
             return 200, {'notes': self.get_json('notes:' + m.group(1), []) or []}
@@ -964,7 +979,7 @@ class Api:
                     res.update({'studentId': sid, 'name': clean_text(data.get('name'), 60), 'className': cls, 'joined': time.time(), 'updatedAt': time.time()})
                     res.setdefault('challenges', {})
                     self.r(['HSET', P + 'examres:' + exam['id'], sid, json.dumps(res)])
-            return 200, {'ok': True, 'exam': exam}
+            return 200, {'ok': True, 'exam': public_exam(exam)}
         if path == '/api/exam/finish':
             # "Submit my test": the student hands in the test; they cannot open it again.
             sid, eid = str(data.get('studentId', '')), str(data.get('examId', ''))
@@ -1013,7 +1028,7 @@ class Api:
             else:
                 best['checks'] = best.get('checks', 0) + 1
             self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
-            return 200, {'ok': True, 'best': res['challenges'][chid]['score']}
+            return 200, ({'ok': True, 'best': res['challenges'][chid]['score']} if self.is_teacher(ctx, None, data) else {'ok': True})  # a student gets no score
         # ----- teacher only -----
         if not teacher:
             return 403, {'error': 'teacher code required'}
@@ -1165,7 +1180,7 @@ class Api:
                 exam = {'id': 'x%x' % int(now * 1000), 'className': cls, 'title': clean_text(data.get('title'), 80) or 'Exam', 'challenges': chs,
                         'minutes': minutes, 'hints': bool(data.get('hints')), 'startedAt': now, 'endsAt': now + minutes * 60, 'stoppedAt': None}
                 ctl = jload(self.r(['HGET', P + 'classctl', cls])[0], {}) or {}
-                ctl['exam'] = {**exam, 'active': True}
+                ctl['exam'] = {**public_exam(exam), 'active': True}
                 self.r(['HSET', P + 'exams', exam['id'], json.dumps(exam)], ['HSET', P + 'classctl', cls, json.dumps(ctl)])
                 return 200, {'ok': True, 'exam': exam}
             eid = str(data.get('examId', ''))
@@ -1187,7 +1202,7 @@ class Api:
                 cmds = [['HSET', P + 'exams', eid, json.dumps(exam)]]
                 if (ctl.get('exam') or {}).get('id') == eid:
                     # "stop": the students see the end screen; "close": back to normal work
-                    ctl['exam'] = {**exam, 'active': False} if action == 'stop' else None
+                    ctl['exam'] = {**public_exam(exam), 'active': False} if action == 'stop' else None
                     cmds.append(['HSET', P + 'classctl', exam['className'], json.dumps(ctl)])
                 self.r(*cmds)
                 return 200, {'ok': True, 'exam': exam}

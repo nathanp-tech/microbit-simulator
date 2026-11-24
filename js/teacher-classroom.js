@@ -294,11 +294,15 @@ async function aiLog(e) {
   $('modal').querySelector('.modal-box').style.maxWidth = '1100px';
   $('alBack').onclick = renderExamResults;
 }
-async function aiMarkExam() {
+// opts.sid: one student only (from their view, even before they hand in); opts.force: mark everything again;
+// opts.say: where to write the progress; opts.after: what to show at the end (else the results)
+async function aiMarkExam(opts = {}) {
+  const say = opts.say || ((t) => { if ($('exMsg')) $('exMsg').textContent = t; });
   const e = X.exam, over = e.stoppedAt || X.now > e.endsAt;
   const todo = [];
   for (const r of X.results) {
-    if (!r.studentId || !(r.finishedAt || over)) continue;
+    if (opts.sid && r.studentId !== opts.sid) continue;
+    if (!r.studentId || !(opts.sid || r.finishedAt || over)) continue;
     for (const cid of e.challenges) {
       const ch = CHALLENGES.find((c) => c.id === cid), c = (r.challenges || {})[cid];
       if (!ch || !c || !c.program) continue;
@@ -306,22 +310,23 @@ async function aiMarkExam() {
         // the typed answers not read yet (an empty answer: 0, nothing to ask)
         const answers = c.program.answers || [];
         const qs = ch.questions.map((q, i) => i).filter((i) => ch.questions[i].open && typeof answers[i] === 'string' && answers[i].trim()
-          && !(r.ai && r.ai[`${cid}#${i}`] && !(c.at > r.ai[`${cid}#${i}`].at)));
+          && (opts.force || !(r.ai && r.ai[`${cid}#${i}`] && !(c.at > r.ai[`${cid}#${i}`].at))));
         if (qs.length) todo.push([r, ch, c, qs]);
         continue;
       }
       const a = r.ai && r.ai[cid];
-      if (!a || c.at > a.at) todo.push([r, ch, c]);
+      if (opts.force || !a || c.at > a.at) todo.push([r, ch, c]);
     }
   }
   const nAns = todo.filter((j) => j[3]).reduce((a, j) => a + j[3].length, 0), nProg = todo.filter((j) => !j[3]).length;
   const what = [nProg ? `${nProg} program${nProg > 1 ? 's' : ''}` : '', nAns ? `${nAns} typed quiz answer${nAns > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
   if (!todo.length) {
     const waiting = X.results.filter((r) => r.studentId && !r.finishedAt).length;
-    $('exMsg').textContent = `🤖 Nothing to mark: every program and typed answer handed in is already marked${!over && waiting ? `. ${waiting} student${waiting > 1 ? 's have' : ' has'} not handed in yet (marked once they click "Submit my test", or when the test is over)` : ''}.`;
+    if (opts.sid) { say('🤖 Nothing to mark: no program and no typed answer.'); return; }
+    say(`🤖 Nothing to mark: every program and typed answer handed in is already marked${!over && waiting ? `. ${waiting} student${waiting > 1 ? 's have' : ' has'} not handed in yet (marked once they click "Submit my test", or when the test is over). Or open a student and click 🤖 AI marking there` : ''}.`);
     return;
   }
-  if (!confirm(`Mark ${what} with the AI (OpenAI ${'gpt-4o'})?\n\nOnly the programs of students who handed in the test${over ? ' (the test is over: everybody)' : ''}. The AI mark replaces the automatic mark (the multiple-choice questions keep the answer key); the marks you changed stay. Each student will also see a short comment in their correction.`)) return;
+  if (!confirm(opts.sid ? `Mark ${what} of ${todo[0][0].name} with the AI (OpenAI gpt-4o)?\n\nThe AI mark replaces the automatic mark (the multiple-choice questions keep the answer key); the marks you changed stay. The student will see a short comment in their correction.` : `Mark ${what} with the AI (OpenAI ${'gpt-4o'})?\n\nOnly the programs of students who handed in the test${over ? ' (the test is over: everybody)' : ''}. The AI mark replaces the automatic mark (the multiple-choice questions keep the answer key); the marks you changed stay. Each student will also see a short comment in their correction.`)) return;
   let sols = {};
   try { sols = (await (await tfetch('api/solutions')).json()).solutions || {}; } catch (err) { /* the solutions of the challenges */ }
   const solText = {};
@@ -347,7 +352,7 @@ async function aiMarkExam() {
       const d = await tpost('api/exam/ai', { examId: e.id, studentId: r.studentId, challengeId: ch.id, questions });
       Object.assign(r.ai || (r.ai = {}), d.ai);
       done++;
-      $('exMsg').textContent = `🤖 AI marking ${done} / ${todo.length}…`;
+      say(`🤖 AI marking ${done} / ${todo.length}…`);
       return;
     }
     let code = '', checks = '';
@@ -359,9 +364,9 @@ async function aiMarkExam() {
     } catch (err) { checks = 'The program cannot run: ' + err.message; }
     const d = await tpost('api/exam/ai', { examId: e.id, studentId: r.studentId, challengeId: ch.id, max: chMarks(ch), task: taskText(ch), code, solution: solOf(ch), checks });
     Object.assign(r.ai || (r.ai = {}), d.ai);
-    $('exMsg').textContent = `🤖 AI marking ${++done} / ${todo.length}…`;
+    say(`🤖 AI marking ${++done} / ${todo.length}…`);
   };
-  $('exMsg').textContent = `🤖 AI marking 0 / ${todo.length}…`;
+  say(`🤖 AI marking 0 / ${todo.length}…`);
   const queue = todo.slice();
   await Promise.all([0, 1, 2].map(async () => {
     while (queue.length && !failed) {
@@ -373,9 +378,10 @@ async function aiMarkExam() {
     }
   }));
   if (errors.length) X.aiError = `${errors.length} error${errors.length > 1 ? 's' : ''}${failed ? ' (stopped)' : ''}. Last: ${errors[errors.length - 1]}`;
-  renderExamResults();
+  if (opts.after) opts.after(); else renderExamResults();
   refreshGrades(true);
-  $('exMsg').textContent = failed ? `⚠ ${done} / ${todo.length} marked. Stopped: ${failed}` : `✓ ${what} marked by the AI: check them (✏️ Mark question by question), then share the corrections.`;
+  say(errors.length ? `⚠ ${done} / ${todo.length} marked. ${failed ? 'Stopped: ' + failed : 'Error: ' + errors[errors.length - 1]} (🧾 AI log in the results)`
+    : opts.sid ? `✓ ${what} marked by the AI: check the 🤖 boxes below.` : `✓ ${what} marked by the AI: check them (✏️ Mark question by question), then share the corrections.`);
 }
 // the work of one student in one test, to open it in the student view (program and board, or the quiz answers)
 function examWork(r, cid) {
@@ -541,15 +547,22 @@ function examViewer(sid, part = 0, back = renderExamResults) {
   const nav = e.challenges.map((cid, i) => { const ch = CHALLENGES.find((k) => k.id === cid), m = partMarks(cid); return `<a href="#ev-${i}" data-evgo="${i}">${ch ? (ch.quiz ? 'Quiz' : esc(ch.title)) : esc(cid)} <b>${m.sent || m.changed ? fmtMark(m.got) : '—'}/${fmtMark(m.max)}</b></a>`; }).join('');
   openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
       <h2>${esc(r.name)} <span class="muted">· ${esc(e.title)}</span></h2><span style="flex:1"></span>
+      ${r.missing || X.fromFile ? '' : `<button id="evAi" title="The AI (OpenAI) reads this student's programs and typed answers: a mark and a short comment for each. You can change the marks">🤖 ${r.ai && Object.keys(r.ai).length ? 'AI marking again' : 'AI marking'}</button>`}
       <span class="ev-total">${fmtMark(sheet.total)} / ${fmtMark(sheet.max)} · grade <b>${g7 === undefined ? '—' : g7} / 7</b></span>
       <button id="evPrev"${idx ? '' : ' disabled'} title="Previous student (←)">‹</button>
       <select id="evPick" title="Go to a student">${list.map((x, i) => `<option value="${esc(keyOf(x.r))}"${i === idx ? ' selected' : ''}>${esc(x.r.name)}${x.r.missing ? ' · no result' : ` · ${fmtMark(x.sheet.total)}/${fmtMark(x.sheet.max)}${x.g7 !== undefined ? ' · ' + x.g7 + '/7' : ''}`}</option>`).join('')}</select>
       <button id="evNext"${idx < list.length - 1 ? '' : ' disabled'} title="Next student (→)">›</button><span class="muted">${idx + 1} / ${list.length}</span></div>
-      <nav class="ev-nav">${nav}</nav></div>
+      <nav class="ev-nav">${nav}</nav><div id="evAiMsg" class="ev-ai-msg" hidden></div></div>
     <div class="ev-body">${r.missing ? `<p class="ev-none">${esc(r.name)} has no result for this exam (did not open it, or nothing was sent).</p>` : e.challenges.map(section).join('')}</div>`);
   $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
   const box = $('modal').querySelector('.modal-box');
   $('evBack').onclick = () => { stopExamViewer(); back(); };
+  if ($('evAi')) $('evAi').onclick = () => {
+    const say = (t) => { const m = $('evAiMsg'); if (m) { m.hidden = false; m.textContent = t; m.classList.toggle('bad', /^⚠/.test(t)); } };
+    $('evAi').disabled = true;
+    aiMarkExam({ sid: keyOf(r), force: !!(r.ai && Object.keys(r.ai).length), say, after: () => { stopExamViewer(); examViewer(sid, 0, back); } })
+      .finally(() => { if ($('evAi')) $('evAi').disabled = false; });
+  };
   const go = (i) => { if (list[i]) examViewer(keyOf(list[i].r), 0, back); };
   $('evPrev').onclick = () => go(idx - 1);
   $('evNext').onclick = () => go(idx + 1);
