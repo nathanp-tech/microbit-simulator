@@ -40,8 +40,7 @@ const keepWs = [];
     const solution = (d.solutions || {})[ch.id] || ch.solution || null;
     owns.push(program && !ch.quiz ? program : null);
     sols.push(solution);
-    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto), feedback: (res.comments || {})[ch.id],
-      qFeedback: ch.quiz ? ch.questions.map((q, i) => (res.comments || {})[`${ch.id}#${i}`]) : null });
+    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto), feedback: ch.quiz ? null : (res.comments || {})[ch.id] });
   });
   const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   root.innerHTML = (q.get('preview') === '1' ? `<div class="corr-preview">👁 <b>Preview</b>: what ${esc(res.name)} will see once you share the corrections. Changed a mark or a comment? Reload this page.</div>` : '') + `<div class="corr-head"><h1>✏️ My correction · ${esc(exam.title)}</h1>

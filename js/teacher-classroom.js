@@ -561,7 +561,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
         const it = sheet.items.find((x) => x.key === `${cid}#${k}`);
         return `<div class="ev-q"><p><b>${k + 1}. ${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-evq="${esc(cid)}:${k}"></div>` : ''}
           ${q.open ? openAnswerHtml(q, answers[k]) : q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
-          ${aiBox(r, `${cid}#${k}`, it)}${q.open ? commentBox(r, `${cid}#${k}`, it) : ''}${markRow(it)}</div>`;
+          ${aiBox(r, `${cid}#${k}`, it)}${markRow(it)}</div>`;
       }).join('')}</section>`;
     }
     const it = sheet.items.find((x) => x.key === cid);
@@ -676,7 +676,7 @@ function renderReview(k) {
     if (!c) return '<span class="muted">nothing submitted</span>';
     if (q) {
       const given = ((c.program && c.program.answers) || [])[it.q];
-      if (q.open) return openAnswerHtml(q, given, false) + aiBox(r, it.key, sheetItem) + commentBox(r, it.key, sheetItem);
+      if (q.open) return openAnswerHtml(q, given, false) + aiBox(r, it.key, sheetItem);
       const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
       return picked || '<span class="muted">no answer</span>';
     }

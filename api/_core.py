@@ -759,7 +759,7 @@ class Api:
                                     'challenges': {c: {'score': v.get('score'), 'program': v.get('program')} for c, v in (res.get('challenges') or {}).items() if isinstance(v, dict)},
                                     'review': {c: {'mark': v.get('mark')} for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)},
                                     'comments': {k: t for k, t in {**{c: v.get('feedback') for c, v in (res.get('ai') or {}).items() if isinstance(v, dict)},
-                                                                   **(res.get('comments') or {})}.items() if t}},
+                                                                   **(res.get('comments') or {})}.items() if t and '#' not in k}},  # programs only: no comment on the quiz
                          'grade': (shared.get('grades') or {}).get(sid),
                          'solutions': {c: (sols.get(c) or [{}])[0].get('program') for c in exam.get('challenges', []) if sols.get(c)}}
         g = self.grant(ctx, params)

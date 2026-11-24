@@ -103,7 +103,7 @@ const openRight = (q, given) => typeof given === 'string' && !(q.reject || []).s
 const fmtHalf = (x) => (Math.round(x * 2) / 2).toString();
 // one part of a test. res: the check of the program, or the quiz graded (null: nothing submitted); marks: the marks given
 // (one per quiz question, or [mark] for a program), else the automatic marks.
-function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote, ownProgram, changed, feedback, qFeedback }) {
+function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote, ownProgram, changed, feedback }) {
   const max = chMarks(ch);
   let got = 0, body;
   if (ch.quiz) {
@@ -118,7 +118,7 @@ function correctionPart(ch, k, { res, program, marks, hasSolution, solutionNote,
       const right = q.open ? esc(q.model || q.accept[0]) : q.multi ? q.answer.map((x) => esc(q.options[x])).join(' · ') : esc(q.options[q.answer]);
       return `<div class="fb-q ${ok ? 'ok' : marksOf[i] > 0 ? 'part' : 'ko'}"><div class="fb-q-head"><b>${ok ? '✔' : marksOf[i] > 0 ? '◐' : '✖'} ${i + 1}. ${esc(q.q)}</b><span class="fb-m">${fmtHalf(marksOf[i])} / ${m}</span></div>
         ${q.code ? `<div class="q-code fb-code" data-fbq="${k}:${i}"></div>` : ''}
-        <div class="fb-line">Your answer: ${yours}</div>${qFeedback && qFeedback[i] ? `<div class="fb-ai">💬 ${esc(qFeedback[i])}</div>` : ''}${ok ? '' : `<div class="fb-line fb-right">Right answer: ${right}</div>`}${q.why ? `<div class="fb-why">💡 ${esc(q.why)}</div>` : ''}</div>`;
+        <div class="fb-line">Your answer: ${yours}</div>${ok ? '' : `<div class="fb-line fb-right">Right answer: ${right}</div>`}${q.why ? `<div class="fb-why">💡 ${esc(q.why)}</div>` : ''}</div>`;
     }).join('');
   } else {
     got = marks ? marks[0] : res ? halfMark(res.score / 100 * max) : 0;
