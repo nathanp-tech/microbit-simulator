@@ -168,8 +168,9 @@ function markSheet(challengeIds, res) {
   const items = examItems(challengeIds).map((it) => {
     const c = chs[it.chId];
     let auto = 0;
-    // a program: the AI mark when there is one (it read the program and the checks), else the score of the checks
+    // the AI mark when there is one (a program, a typed answer), else the checks / the answer key
     let tests = null, ai = null;
+    // a program: the AI read the program and the checks
     if (c && it.q === null) {
       auto = tests = halfMark((Number(c.score) || 0) / 100 * it.max);
       const a = res && res.ai && res.ai[it.chId];
@@ -179,7 +180,9 @@ function markSheet(challengeIds, res) {
       const ch = CHALLENGES.find((x) => x.id === it.chId);
       const answers = (c.program && c.program.answers) || [];
       const g = quizCache[it.chId] || (quizCache[it.chId] = gradeQuiz(ch, answers));
-      auto = halfMark(g.criteria[it.q].points * it.max);
+      auto = tests = halfMark(g.criteria[it.q].points * it.max);
+      const a = ch.questions[it.q].open && res && res.ai && res.ai[it.key];  // a typed answer read by the AI
+      if (a && typeof a.mark === 'number') auto = ai = Math.max(0, Math.min(it.max, halfMark(a.mark)));
     }
     const has = Object.prototype.hasOwnProperty.call(over, it.key) && over[it.key] !== null;
     return { ...it, submitted: !!c, auto, tests, ai, mark: has ? Number(over[it.key]) : auto, changed: has };

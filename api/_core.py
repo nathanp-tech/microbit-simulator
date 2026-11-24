@@ -278,6 +278,17 @@ def norm(s):
     return ' '.join(''.join(c for c in s if not unicodedata.combining(c)).split()).casefold()
 
 
+def exam_parts(exams):
+    # the tests of a student, without the programs (the progress dots of the live view): the 6 latest, per part:
+    # c = times submitted, b = best score, p = something written (a program or quiz answers)
+    if not isinstance(exams, dict):
+        return {}
+    recent = sorted((kv for kv in exams.items() if isinstance(kv[1], dict)), key=lambda kv: kv[1].get('startedAt') or 0, reverse=True)[:6]
+    return {eid: {'title': clean_text(e.get('title'), 80), 'startedAt': e.get('startedAt'), 'done': bool(e.get('done')),
+                  'slots': {cid: {'c': int(sl.get('checks') or 0), 'b': sl.get('best'), 'p': bool(sl.get('program') or sl.get('answers'))}
+                            for cid, sl in (e.get('slots') or {}).items() if isinstance(sl, dict)}} for eid, e in recent}
+
+
 def strip_programs(data):
     snap = dict(data)
     snap['challenges'] = {k: {kk: vv for kk, vv in v.items() if kk not in ('program', 'robot', 'answers', 'quizMarks')} for k, v in (data.get('challenges') or {}).items()}
@@ -285,6 +296,7 @@ def strip_programs(data):
     free.pop('program', None)
     free.pop('robot', None)
     snap['free'] = free
+    snap['examParts'] = exam_parts(data.get('exams'))
     snap.pop('exams', None)
     snap['events'] = (data.get('events') or [])[-60:]
     return snap
@@ -339,19 +351,76 @@ AI_PROMPT = '\n'.join([
 ])
 
 
+AI_QUIZ_SCHEMA = {
+    'type': 'object', 'additionalProperties': False, 'required': ['answers'],
+    'properties': {'answers': {'type': 'array', 'items': {
+        'type': 'object', 'additionalProperties': False, 'required': ['question', 'mark', 'feedback', 'teacherNote'],
+        'properties': {
+            'question': {'type': 'integer', 'description': 'The number of the question, as given'},
+            'mark': {'type': 'number', 'description': 'From 0 to the marks of the question, in half marks'},
+            'feedback': {'type': 'string', 'description': 'For the student: one short, simple sentence'},
+            'teacherNote': {'type': 'string', 'description': 'For the teacher: why this mark'},
+        }}}},
+}
+AI_QUIZ_PROMPT = '\n'.join([
+    'You mark the TYPED answers of a quiz for students aged 13-14 (beginners) about the BBC micro:bit and its MakeCode blocks.',
+    'English is often not their first language. For each question you get: the question, its marks, the expected answer,',
+    'the words the answer key accepts, the program shown with the question (MakeCode JavaScript) if there is one, the',
+    "student's answer and what the answer key decided (it only looks for words).",
+    '',
+    'RULES',
+    '1. Mark the IDEA, not the words: a right answer with spelling mistakes, other words with the same meaning, a longer',
+    '   sentence or a right answer in another language (say so in teacherNote) gets the marks.',
+    '2. A wrong, vague or contradictory answer (two answers, one wrong) does not. Do not guess what they meant.',
+    '3. When there is a program, work out yourself what it does: the expected answer is right, but check the reasoning.',
+    '4. Half marks only when the question has 2 marks or more and the answer is partly right.',
+    '5. feedback: TO the student, simple English (A2), one short sentence: why it is right, or the right idea. No mark in it.',
+    '6. teacherNote: for the teacher, one sentence, especially when you disagree with the answer key.',
+    '7. Give one item per question, with the question number as given.',
+])
+
+
 class AIError(Exception):
     pass
 
 
 def ai_mark(task, max_marks, code, solution, checks):
     """One OpenAI call (Responses API, temperature 0, strict JSON schema). Returns {mark, feedback, teacherNote}."""
+    user = (f'TASK ({fmt_num(max_marks)} marks)\n{task}\n\nA PROGRAM THAT WORKS\n{solution or "(none)"}\n\n'
+            f'STUDENT PROGRAM\n{code or "(empty: no blocks that run)"}\n\nAUTOMATIC CHECKS\n{checks or "(none)"}')
+    out, model = ai_call(AI_PROMPT, user, 'microbit_mark', AI_SCHEMA)
+    try:
+        return {'mark': float(out['mark']), 'feedback': str(out['feedback'])[:600], 'teacherNote': str(out['teacherNote'])[:800], 'model': model}
+    except (ValueError, KeyError, TypeError):
+        raise AIError('The AI answer cannot be read.')
+
+
+def ai_mark_quiz(qs):
+    """The typed answers of one quiz in one call. Returns one {mark, feedback, teacherNote} per question, in the same order."""
+    parts = []
+    for q in qs:
+        parts.append(f'QUESTION {q["i"] + 1} ({fmt_num(q["marks"])} mark{"s" if q["marks"] != 1 else ""})\n{q["question"]}\n'
+                     + (f'Program shown:\n{q["program"]}\n' if q['program'] else '')
+                     + f'Expected answer: {q["model"]}\nThe answer key accepts: {q["accept"]}\n'
+                     f'Student answer: "{q["answer"]}"\nAnswer key decision: {q["auto"]}')
+    out, model = ai_call(AI_QUIZ_PROMPT, '\n\n'.join(parts), 'microbit_quiz', AI_QUIZ_SCHEMA)
+    by = {}
+    try:
+        for a in out['answers']:
+            by[int(a['question'])] = a
+        return [{'mark': float(by[q['i'] + 1]['mark']), 'feedback': str(by[q['i'] + 1]['feedback'])[:400],
+                 'teacherNote': str(by[q['i'] + 1]['teacherNote'])[:600], 'model': model} for q in qs]
+    except (ValueError, KeyError, TypeError):
+        raise AIError('The AI answer cannot be read.')
+
+
+def ai_call(system, user, name, schema):
+    """POST /v1/responses with the key of the environment. Returns (the JSON object of the answer, the model)."""
     key = os.environ.get('OPENAI_API_KEY')
     if not key:
         raise AIError('OPENAI_API_KEY is missing: add it in Vercel (Settings → Environment Variables), then redeploy.')
-    user = (f'TASK ({fmt_num(max_marks)} marks)\n{task}\n\nA PROGRAM THAT WORKS\n{solution or "(none)"}\n\n'
-            f'STUDENT PROGRAM\n{code or "(empty: no blocks that run)"}\n\nAUTOMATIC CHECKS\n{checks or "(none)"}')
-    body = {'model': AI_MODEL, 'temperature': 0, 'input': [{'role': 'system', 'content': AI_PROMPT}, {'role': 'user', 'content': user}],
-            'text': {'format': {'type': 'json_schema', 'name': 'microbit_mark', 'strict': True, 'schema': AI_SCHEMA}}}
+    body = {'model': AI_MODEL, 'temperature': 0, 'input': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],
+            'text': {'format': {'type': 'json_schema', 'name': name, 'strict': True, 'schema': schema}}}
     base = (os.environ.get('OPENAI_BASE_URL') or 'https://api.openai.com/v1').rstrip('/')  # another address only for the tests
     req = urllib.request.Request(base + '/responses', data=json.dumps(body).encode(), method='POST',
                                  headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
@@ -369,9 +438,8 @@ def ai_mark(task, max_marks, code, solution, checks):
     text = ''.join(c.get('text', '') for o in d.get('output') or [] if o.get('type') == 'message'
                    for c in o.get('content') or [] if c.get('type') == 'output_text')
     try:
-        out = json.loads(text)
-        return {'mark': float(out['mark']), 'feedback': str(out['feedback'])[:600], 'teacherNote': str(out['teacherNote'])[:800], 'model': d.get('model') or AI_MODEL}
-    except (ValueError, KeyError, TypeError):
+        return json.loads(text), d.get('model') or AI_MODEL
+    except ValueError:
         raise AIError('The AI answer cannot be read.')
 
 
@@ -683,6 +751,15 @@ class Api:
         if path == '/api/progress':
             raw = self.r(['HGETALL', P + 'snap'], ['HGETALL', P + 'help'], ['HGETALL', P + 'classctl'], ['HGETALL', P + 'seen'])
             snaps, seen = hash_dict(raw[0]), hash_dict(raw[3])
+            # snapshots saved before the tests were summed up in them (examParts): once, from the saved work
+            old = [sid for sid, s in snaps.items() if s and 'examParts' not in s][:40]
+            if old:
+                works = self.r(*[['GET', P + 'work:' + sid] for sid in old])
+                fix = []
+                for sid, w in zip(old, works):
+                    snaps[sid]['examParts'] = exam_parts((jload(w, {}) or {}).get('exams'))
+                    fix.append(['HSET', P + 'snap', sid, json.dumps(snaps[sid])])
+                self.r(*fix)
             for sid, s in snaps.items():
                 pr = seen.get(sid)
                 if s and pr and pr.get('t', 0) > s.get('receivedAt', 0):  # presence newer than the last save
@@ -722,6 +799,10 @@ class Api:
         if path == '/api/exams':
             exams = sorted((e for e in hash_dict(self.r(['HGETALL', P + 'exams'])[0]).values() if e), key=lambda e: e.get('startedAt', 0), reverse=True)
             return 200, {'exams': exams, 'now': time.time()}
+        if path == '/api/exam/ailog':
+            eid = str(params.get('examId', ''))
+            log = [x for x in (jload(v) for v in self.r(['LRANGE', P + 'ailog', 0, -1])[0] or []) if x][::-1]  # newest first
+            return 200, {'log': [x for x in log if not eid or x.get('examId') == eid], 'key': bool(os.environ.get('OPENAI_API_KEY')), 'model': AI_MODEL}
         if path == '/api/exam/results':
             eid = str(params.get('examId', ''))
             raw = self.r(['HGET', P + 'exams', eid], ['HGETALL', P + 'examres:' + eid])
@@ -1033,18 +1114,45 @@ class Api:
             exam, res = jload(raw[0]), jload(raw[1], {}) or {}
             if not exam or cid not in exam.get('challenges', []) or not (res.get('challenges') or {}).get(cid):
                 return 404, {'error': 'no such program'}
+            now, found = time.time(), {}
+            part = cid + (' (typed answers)' if isinstance(data.get('questions'), list) else '')
+            def ai_log(ok, msg):  # every AI call, for the 🧾 AI log of the teacher dashboard (the 300 latest)
+                entry = {'t': time.time(), 'examId': eid, 'studentId': sid, 'name': res.get('name'), 'part': part, 'ok': ok, 'msg': clean_text(msg, 400), 'ms': int((time.time() - now) * 1000)}
+                self.r(['RPUSH', P + 'ailog', json.dumps(entry)], ['LTRIM', P + 'ailog', -300, -1])
             try:
-                mx = float(data.get('max') or 0)
-                out = ai_mark(clean_text(data.get('task'), 3000), mx, clean_text(data.get('code'), 8000),
-                              clean_text(data.get('solution'), 4000), clean_text(data.get('checks'), 3000))
+                if isinstance(data.get('questions'), list):
+                    # the typed answers of the quiz: one call for all of them; saved per question ("quiz-test#2")
+                    qs = []
+                    for q in data['questions'][:20]:
+                        i, mx = int(q.get('i')), float(q.get('marks') or 1)
+                        if not 0 <= i < 40:
+                            return 400, {'error': 'bad request'}
+                        qs.append({'i': i, 'marks': mx, 'question': clean_text(q.get('q'), 400), 'model': clean_text(q.get('model'), 300),
+                                   'accept': clean_text(q.get('accept'), 300), 'program': clean_text(q.get('code'), 2000), 'answer': clean_text(q.get('answer'), 200),
+                                   'auto': clean_text(q.get('auto'), 40)})
+                    for q, a in zip(qs, ai_mark_quiz(qs)):
+                        found[f'{cid}#{q["i"]}'] = {**a, 'mark': max(0.0, min(q['marks'], round(float(a['mark']) * 2) / 2)), 'at': now}
+                else:
+                    mx = float(data.get('max') or 0)
+                    out = ai_mark(clean_text(data.get('task'), 3000), mx, clean_text(data.get('code'), 8000),
+                                  clean_text(data.get('solution'), 4000), clean_text(data.get('checks'), 3000))
+                    found[cid] = {**out, 'mark': max(0.0, min(mx, round(float(out['mark']) * 2) / 2)), 'at': now}
             except AIError as err:
+                ai_log(False, str(err))
                 return 503, {'error': str(err)}
-            out['mark'] = max(0.0, min(mx, round(float(out['mark']) * 2) / 2))
-            out['at'] = time.time()
+            except (TypeError, ValueError) as err:
+                ai_log(False, f'bad request: {err}')
+                return 400, {'error': 'bad request'}
+            except Exception as err:  # noqa: BLE001 - shown in the AI log, not hidden
+                ai_log(False, f'server error: {type(err).__name__}: {err}')
+                return 500, {'error': f'server error: {err}'}
+            ai_log(True, ', '.join(f'{k}: {fmt_num(v["mark"])}' for k, v in found.items()) or 'nothing to mark')
             res = jload(self.r(['HGET', P + 'examres:' + eid, sid])[0], {}) or res  # read again: a mark may have changed meanwhile
-            res.setdefault('ai', {})[cid] = out
+            if isinstance(data.get('questions'), list):
+                res.setdefault('ai', {}).pop(cid, None)  # a quiz is marked per question only
+            res.setdefault('ai', {}).update(found)
             self.r(['HSET', P + 'examres:' + eid, sid, json.dumps(res)])
-            return 200, {'ok': True, 'ai': out}
+            return 200, {'ok': True, 'ai': found}
         if path == '/api/exam':
             action = data.get('action')
             if action == 'start':

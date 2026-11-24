@@ -33,7 +33,8 @@ const keepWs = [];
     const solution = (d.solutions || {})[ch.id] || ch.solution || null;
     owns.push(program && !ch.quiz ? program : null);
     sols.push(solution);
-    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto), feedback: ((res.ai || {})[ch.id] || {}).feedback });
+    return correctionPart(ch, k, { res: checked[ch.id], program, marks, hasSolution: !ch.quiz && !!solution, solutionNote: ch.solutionNote, ownProgram: true, changed: its.some((it) => it.changed && it.mark !== it.auto), feedback: ((res.ai || {})[ch.id] || {}).feedback,
+      qFeedback: ch.quiz ? ch.questions.map((q, i) => ((res.ai || {})[`${ch.id}#${i}`] || {}).feedback) : null });
   });
   const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   root.innerHTML = `<div class="corr-head"><h1>✏️ My correction · ${esc(exam.title)}</h1>

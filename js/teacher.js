@@ -16,13 +16,33 @@ const T = {
 
 // Progress dots: one per challenge, click to see the student's code for that challenge.
 const STATUS_TEXT = { locked: 'locked', open: 'in progress', passed: 'passed', validated: 'passed' };
+// The tests of a student, per part (the latest test that has this part): from the live snapshot (examParts) or a full
+// work file (exams)
+function examPartsOf(s) {
+  if (s.examParts) return s.examParts;
+  return Object.fromEntries(Object.entries(s.exams || {}).map(([eid, e]) => [eid, { title: e.title, startedAt: e.startedAt, done: !!e.done,
+    slots: Object.fromEntries(Object.entries(e.slots || {}).map(([cid, sl]) => [cid, { c: sl.checks || 0, b: sl.best, p: !!(sl.program || sl.answers) }])) }]));
+}
+function partStatus(s, c) {
+  const parts = examPartsOf(s);
+  const found = Object.entries(parts).filter(([, e]) => e.slots && e.slots[c.id] && (e.slots[c.id].c || e.slots[c.id].p))
+    .sort((a, b) => (b[1].startedAt || 0) - (a[1].startedAt || 0))[0];
+  const e = s.challenges && s.challenges[c.id];
+  if (found) {
+    const [eid, ex] = found, sl = ex.slots[c.id];
+    return { st: sl.c ? 'validated' : 'open', slot: eid + '-' + c.id, text: `${ex.title || 'Test'}: ${sl.c ? `submitted${nb(sl.b) !== null ? ' · best ' + nb(sl.b) + ' %' : ''}` : 'started, not submitted yet'}` };
+  }
+  const st = okStatus(e && e.status);
+  return { st, slot: c.id, text: STATUS_TEXT[st] + (e && nb(e.bestScore) !== null ? ' · best ' + nb(e.bestScore) + ' %' : '') };
+}
+const partsDone = (s) => CHALLENGES.filter((c) => partStatus(s, c).st === 'validated').length;
 function dotsHtml(s, ref) {
+  const now = s.live && s.live.exam ? s.live.exam.challenge : s.mode !== 'free' ? s.current : null;
   return '<span class="dots">' + CHALLENGES.map((c, i) => {
-    const e = s.challenges && s.challenges[c.id];
-    const st = okStatus(e && e.status);
+    const p = partStatus(s, c);
     const gap = i && CHALLENGES[i - 1].cat !== c.cat ? '<span class="dot-gap"></span>' : '';
-    const tip = `${categoryOf(c).icon} ${c.title}: ${STATUS_TEXT[st]}${e && nb(e.bestScore) !== null ? ' · best ' + nb(e.bestScore) + ' %' : ''} · click to see the code`;
-    return `${gap}<button class="dot ${st}${s.mode !== 'free' && s.current === c.id ? ' cur' : ''}" data-dot="${esc(ref)}" data-ch="${c.id}" title="${esc(tip)}"></button>`;
+    const tip = `${categoryOf(c).icon} ${c.title}: ${p.text} · click to see the code`;
+    return `${gap}<button class="dot ${p.st}${now === c.id ? ' cur' : ''}" data-dot="${esc(ref)}" data-ch="${esc(p.slot)}" title="${esc(tip)}"></button>`;
   }).join('') + '</span>';
 }
 
@@ -63,7 +83,7 @@ function rowHtml(s, i, stats, source) {
   return `<tr class="${status.cls === 'wait' ? 'waiting' : status.cls === 'away' ? 'away-row' : ''}">
     <td>${source === 'live' && T.help.some((h) => h.studentId === s.studentId) ? '<span class="help-badge" title="Asked for help">🙋</span>' : ''}${source === 'live' ? `<span class="pres ${isOnline(s) ? 'on' : 'off'}" title="${isOnline(s) ? 'Connected now' : 'Not connected now'}"></span>` : ''}<b>${esc(s.name)}</b>${s.className && source !== 'live' ? ` <span class="muted">${esc(s.className)}</span>` : ''}</td>
     <td>${modeCell}</td>
-    <td>${dotsHtml(s, source + ':' + i)}<span class="muted">${a.validated} / ${CHALLENGES.length}</span></td>
+    <td>${dotsHtml(s, source + ':' + i)}<span class="muted">${partsDone(s)} / ${CHALLENGES.length}</span></td>
     <td>${free ? `<button class="linklike" data-dot="${source}:${i}" data-ch="free">free programming</button>` : esc(chShort(s.current))}</td>
     <td>${free ? fmtTime(s.freeTime) : fmtTime(cur && cur.timeSpent)}</td>
     <td>${nb(free ? s.free && s.free.runs : cur && cur.runs) || 0}</td>
@@ -445,7 +465,7 @@ function renderManage() {
   const selected = new Set([...document.querySelectorAll('.mg-sel:checked')].map((c) => c.dataset.id));
   const unlockOpts = CHALLENGES.map((c, i) => `<option value="${i}">${esc(c.title)}</option>`).join('');
   $('mgRows').innerHTML = groupedHtml(list.map((s) => ({ s, html: (() => {
-    const done = Object.values(s.challenges || {}).filter((c) => c.status === 'validated').length;
+    const done = partsDone(s);
     const last = s.updatedAt ? new Date(s.updatedAt).toLocaleString() : '—';
     return `<tr data-id="${esc(s.studentId)}">
       <td><input type="checkbox" class="mg-sel" data-id="${esc(s.studentId)}"${selected.has(s.studentId) ? ' checked' : ''}></td>

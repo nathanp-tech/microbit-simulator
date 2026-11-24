@@ -140,8 +140,11 @@ s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1
 AI = {'examId': eid, 'studentId': A, 'challengeId': 'c1', 'max': 4, 'task': 't', 'code': 'x', 'solution': 'y', 'checks': 'z'}
 s, r = call('POST', '/api/exam/ai', AI); check(s in (401, 403), 'a student cannot ask the AI marking')
 s, r = call('POST', '/api/exam/ai', {**AI, 'challengeId': 'c9'}, teacher=True); check(s == 404, 'AI marking: a part outside the exam refused')
+s, r = call('POST', '/api/exam/ai', {**AI, 'challengeId': 'c2', 'questions': [{'i': 99, 'q': 'x', 'answer': 'y'}]}, teacher=True); check(s == 400, 'AI quiz marking: a wrong question number refused', r)
 if not os.environ.get('MB_AI_MOCK'):
     s, r = call('POST', '/api/exam/ai', AI, teacher=True); check(s == 503 and 'OPENAI_API_KEY' in r.get('error', ''), 'AI marking without a key: a clear message', r)
+    s, r = call('GET', '/api/exam/ailog?examId=' + eid, teacher=True); check(s == 200 and r['key'] is False and r['log'] and not r['log'][0]['ok'] and 'OPENAI_API_KEY' in r['log'][0]['msg'], 'AI log: the error is saved, the missing key said', r)
+s, r = call('GET', '/api/exam/ailog?examId=' + eid); check(s in (401, 403), 'a student cannot read the AI log')
 s, r = call('POST', '/api/exam/mark', {'examId': eid, 'studentId': A, 'key': 'c1', 'marks': 'x'}, teacher=True); check(s == 400, 'bad mark refused')
 s, r = call('POST', '/api/exam/finish', {'studentId': B, 'examId': eid}, cls='Tech5ENd'); check(s == 404, 'finish refused for another class')
 s, r = call('POST', '/api/exam/finish', {'studentId': A, 'examId': eid, 'away': {'n': 2, 'ms': 15000}}); check(s == 200 and r.get('finishedAt'), 'student hands in the test')

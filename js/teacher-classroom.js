@@ -265,11 +265,11 @@ function examRows() {
 }
 const fmtMark = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 // what the AI said about one program: its mark, the comment the student will see, the note for the teacher
-function aiBox(r, cid, it) {
-  const a = r && r.ai && r.ai[cid];
-  if (!a) return '';
-  const stale = ((r.challenges || {})[cid] || {}).at > a.at;
-  return `<div class="ai-note">🤖 <b>AI: ${fmtMark(it.ai)} / ${fmtMark(it.max)}</b> <span class="muted">(automatic checks: ${fmtMark(it.tests)})</span>${stale ? ' <b>⚠ the program changed after: mark it again</b>' : ''}
+function aiBox(r, key, it) {
+  const a = r && r.ai && r.ai[key];
+  if (!a || !it) return '';
+  const stale = ((r.challenges || {})[key.split('#')[0]] || {}).at > a.at;
+  return `<div class="ai-note">🤖 <b>AI: ${fmtMark(it.ai)} / ${fmtMark(it.max)}</b> <span class="muted">(${it.q === null ? 'automatic checks' : 'answer key'}: ${fmtMark(it.tests)})</span>${stale ? ' <b>⚠ the program changed after: mark it again</b>' : ''}
     <div>💬 <i>For the student:</i> ${esc(a.feedback)}</div><div>📝 <i>Why:</i> ${esc(a.teacherNote)}</div></div>`;
 }
 // the text of a challenge for the AI (no pictures)
@@ -280,6 +280,20 @@ function taskText(ch) {
   return `${ch.title}\n${d.trim()}\nBlocks to use: ${ch.skills || ''}`;
 }
 // 🤖 AI marking: each program handed in (not marked yet, or changed since) → OpenAI (key on the server) → the AI mark
+// 🧾 the AI log: every call of this test (saved on the server), newest first
+async function aiLog(e) {
+  let d;
+  try { d = await (await tfetch('api/exam/ailog?examId=' + encodeURIComponent(e.id))).json(); } catch (err) { alert('The log cannot be read: ' + err.message); return; }
+  const rows = (d.log || []).map((x) => `<tr class="${x.ok ? '' : 'ai-err'}"><td style="white-space:nowrap">${new Date(x.t * 1000).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+    <td>${esc(x.name || x.studentId)}</td><td>${esc(chName(String(x.part || '').split(' ')[0]))}${/typed/.test(x.part) ? ' (typed answers)' : ''}</td><td>${x.ok ? '✅' : '❌'} ${esc(x.msg)}</td><td class="muted">${(x.ms / 1000).toFixed(1)} s</td></tr>`).join('');
+  openModal(`<h2>🧾 AI log · ${esc(e.title)} · ${esc(e.className)}</h2>
+    <p class="muted">OpenAI key on the server: <b>${d.key ? '✅ found' : '❌ missing (Vercel → Settings → Environment Variables → OPENAI_API_KEY, then Redeploy)'}</b> · model ${esc(d.model || '')}. Each line is one call: a student's program, or all their typed answers.</p>
+    ${X.aiError ? `<p class="warn-box">⚠ Last run in this window: ${esc(X.aiError)}</p>` : ''}
+    <div style="overflow-x:auto"><table class="cls"><thead><tr><th>When</th><th>Student</th><th>Part</th><th>Result</th><th>Time</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No AI call for this test yet.</td></tr>'}</tbody></table></div>
+    <div class="actions"><button id="alBack">← Back to the results</button></div>`);
+  $('modal').querySelector('.modal-box').style.maxWidth = '1100px';
+  $('alBack').onclick = renderExamResults;
+}
 async function aiMarkExam() {
   const e = X.exam, over = e.stoppedAt || X.now > e.endsAt;
   const todo = [];
@@ -287,13 +301,27 @@ async function aiMarkExam() {
     if (!r.studentId || !(r.finishedAt || over)) continue;
     for (const cid of e.challenges) {
       const ch = CHALLENGES.find((c) => c.id === cid), c = (r.challenges || {})[cid];
-      if (!ch || ch.quiz || !c || !c.program) continue;
+      if (!ch || !c || !c.program) continue;
+      if (ch.quiz) {
+        // the typed answers not read yet (an empty answer: 0, nothing to ask)
+        const answers = c.program.answers || [];
+        const qs = ch.questions.map((q, i) => i).filter((i) => ch.questions[i].open && typeof answers[i] === 'string' && answers[i].trim()
+          && !(r.ai && r.ai[`${cid}#${i}`] && !(c.at > r.ai[`${cid}#${i}`].at)));
+        if (qs.length) todo.push([r, ch, c, qs]);
+        continue;
+      }
       const a = r.ai && r.ai[cid];
       if (!a || c.at > a.at) todo.push([r, ch, c]);
     }
   }
-  if (!todo.length) { $('exMsg').textContent = '🤖 Every program handed in is already marked by the AI.'; return; }
-  if (!confirm(`Mark ${todo.length} program${todo.length > 1 ? 's' : ''} with the AI (OpenAI ${'gpt-4o'})?\n\nOnly the programs of students who handed in the test${over ? ' (the test is over: everybody)' : ''}. The AI mark replaces the automatic mark; the marks you changed stay. Each student will also see a short comment in their correction.`)) return;
+  const nAns = todo.filter((j) => j[3]).reduce((a, j) => a + j[3].length, 0), nProg = todo.filter((j) => !j[3]).length;
+  const what = [nProg ? `${nProg} program${nProg > 1 ? 's' : ''}` : '', nAns ? `${nAns} typed quiz answer${nAns > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
+  if (!todo.length) {
+    const waiting = X.results.filter((r) => r.studentId && !r.finishedAt).length;
+    $('exMsg').textContent = `🤖 Nothing to mark: every program and typed answer handed in is already marked${!over && waiting ? `. ${waiting} student${waiting > 1 ? 's have' : ' has'} not handed in yet (marked once they click "Submit my test", or when the test is over)` : ''}.`;
+    return;
+  }
+  if (!confirm(`Mark ${what} with the AI (OpenAI ${'gpt-4o'})?\n\nOnly the programs of students who handed in the test${over ? ' (the test is over: everybody)' : ''}. The AI mark replaces the automatic mark (the multiple-choice questions keep the answer key); the marks you changed stay. Each student will also see a short comment in their correction.`)) return;
   let sols = {};
   try { sols = (await (await tfetch('api/solutions')).json()).solutions || {}; } catch (err) { /* the solutions of the challenges */ }
   const solText = {};
@@ -305,7 +333,23 @@ async function aiMarkExam() {
     return solText[ch.id];
   };
   let done = 0, failed = null;
-  const one = async ([r, ch, c]) => {
+  const errors = [];
+  X.aiError = null;
+  const one = async ([r, ch, c, qs]) => {
+    if (qs) {
+      const answers = c.program.answers || [], g = gradeQuiz(ch, answers);
+      const questions = qs.map((i) => {
+        const q = ch.questions[i];
+        let code = '';
+        try { code = q.code ? programFromState(q.code).ts : ''; } catch (err) { /* no program */ }
+        return { i, q: q.q, marks: q.marks || 1, model: q.model || q.accept[0], accept: q.accept.join(', ') + (q.reject && q.reject.length ? ` (refused when it has: ${q.reject.join(', ')})` : ''), code, answer: answers[i], auto: g.criteria[i].ok ? 'right' : 'wrong' };
+      });
+      const d = await tpost('api/exam/ai', { examId: e.id, studentId: r.studentId, challengeId: ch.id, questions });
+      Object.assign(r.ai || (r.ai = {}), d.ai);
+      done++;
+      $('exMsg').textContent = `🤖 AI marking ${done} / ${todo.length}…`;
+      return;
+    }
     let code = '', checks = '';
     try {
       const prog = programFromState(c.program);
@@ -314,7 +358,7 @@ async function aiMarkExam() {
       checks = `Score of the checks: ${res.score} %\n` + res.criteria.map((k) => `${k.ok ? 'OK ' : k.points ? 'PART ' : 'NO '} ${k.label}${k.max ? ` (${k.points}/${k.max})` : ''}`).join('\n');
     } catch (err) { checks = 'The program cannot run: ' + err.message; }
     const d = await tpost('api/exam/ai', { examId: e.id, studentId: r.studentId, challengeId: ch.id, max: chMarks(ch), task: taskText(ch), code, solution: solOf(ch), checks });
-    (r.ai || (r.ai = {}))[ch.id] = d.ai;
+    Object.assign(r.ai || (r.ai = {}), d.ai);
     $('exMsg').textContent = `🤖 AI marking ${++done} / ${todo.length}…`;
   };
   $('exMsg').textContent = `🤖 AI marking 0 / ${todo.length}…`;
@@ -322,12 +366,16 @@ async function aiMarkExam() {
   await Promise.all([0, 1, 2].map(async () => {
     while (queue.length && !failed) {
       const job = queue.shift();
-      try { await one(job); } catch (err) { failed = err.message; }
+      try { await one(job); } catch (err) {
+        errors.push(`${job[0].name} · ${job[1].title}: ${err.message}`);
+        if (errors.length >= 3 || /OPENAI_API_KEY|401|403|429|quota/i.test(err.message)) failed = err.message;  // the key, the quota: no use going on
+      }
     }
   }));
+  if (errors.length) X.aiError = `${errors.length} error${errors.length > 1 ? 's' : ''}${failed ? ' (stopped)' : ''}. Last: ${errors[errors.length - 1]}`;
   renderExamResults();
   refreshGrades(true);
-  $('exMsg').textContent = failed ? `⚠ ${done} / ${todo.length} marked. Stopped: ${failed}` : `✓ ${done} program${done > 1 ? 's' : ''} marked by the AI: check them (✏️ Mark question by question), then share the corrections.`;
+  $('exMsg').textContent = failed ? `⚠ ${done} / ${todo.length} marked. Stopped: ${failed}` : `✓ ${what} marked by the AI: check them (✏️ Mark question by question), then share the corrections.`;
 }
 // the work of one student in one test, to open it in the student view (program and board, or the quiz answers)
 function examWork(r, cid) {
@@ -353,14 +401,15 @@ function renderExamResults() {
       <div class="hist">${hist.map((n, i) => `<div class="hbar"><span class="hn">${n || ''}</span><div style="height:${Math.round(n / hmax * 60)}px"></div><b>${i + 1}</b></div>`).join('')}</div></div>
     <div class="actions"><button class="primary" id="exReview" title="Go through the questions one by one and change the marks">✏️ Mark question by question</button>
       <button id="exAi" title="After the test: the AI (OpenAI) reads each program handed in and gives a mark and a short comment for the student. You check and change them before sharing">🤖 AI marking</button>
+      <button id="exAiLog" title="Every AI marking call of this test: what worked, and the errors">🧾 AI log</button>
       <button id="exVerify" title="Replays every saved program on the official trials (deterministic): checks that nobody changed their score">🔁 Verify by replaying</button>
       <button id="exShare" title="Mark the test first. Then: a text to copy with the link of each student's correction (no password needed)">🔗 Correction links${e.shared ? ' ✓' : ''}</button>
-      <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>
+      <button id="exCsv">📊 CSV</button><button id="exSave" title="Save everything of this exam on this computer (JSON)">💾 Backup</button><button id="exRefresh">↻ Refresh</button><span id="exMsg" class="muted"></span></div>${X.aiError ? `<p class="warn-box" id="exAiErr">⚠ AI marking: ${esc(X.aiError)} <button class="mini" id="exAiErrLog">🧾 See the AI log</button></p>` : ''}
     ${X.fromFile ? `<p class="warn-box">📂 Opened from the backup file <b>${esc(X.fromFile)}</b>: changing a mark needs the database.</p>` : ''}
     <div style="overflow-x:auto"><table class="cls exam-table"><thead><tr><th>Student</th>${items.map((it, k) => `<th title="${esc(it.label)}"><button class="linklike" data-review="${k}">${esc(it.short)}</button><br><span class="muted">/${fmtMark(it.max)}</span></th>`).join('')}<th>Total<br><span class="muted">/${fmtMark(max)}</span></th><th>Grade<br><span class="muted">/7</span></th><th title="When the student clicked Submit my test">Handed in</th><th title="How many times the student left the test page (other tab, other window, page closed), and for how long">Left the page</th></tr></thead><tbody>
     ${rows.map(({ r, sheet, g7 }) => `<tr${r.missing ? ' class="absent"' : ''}><td><button class="linklike" data-exstudent="${esc(r.studentId || 'name:' + r.name)}" title="See the whole exam of this student"><b>${esc(r.name)}</b></button>${r.missing ? ' <span class="muted">no result</span>' : ''}</td>
       ${sheet.items.map((it) => (r.missing ? '<td class="muted">—</td>'
-    : `<td><input type="number" class="cell-mark${it.changed ? ' mark-changed' : it.ai !== null ? ' ai-mark' : ''}${!it.submitted && !it.changed ? ' empty' : ''}" data-sid="${esc(r.studentId)}" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : it.ai !== null ? `AI mark (automatic checks: ${fmtMark(it.tests)}): type another one to change it` : it.submitted ? 'Automatic mark: type another one to change it' : 'Nothing submitted'}"></td>`)).join('')}
+    : `<td><input type="number" class="cell-mark${it.changed ? ' mark-changed' : it.ai !== null ? ' ai-mark' : ''}${!it.submitted && !it.changed ? ' empty' : ''}" data-sid="${esc(r.studentId)}" data-key="${esc(it.key)}" data-max="${it.max}" min="0" max="${it.max}" step="0.5" value="${it.mark}" title="${it.changed ? `Changed by you (automatic: ${fmtMark(it.auto)})` : it.ai !== null ? `AI mark (${it.q === null ? 'automatic checks' : 'answer key'}: ${fmtMark(it.tests)}): type another one to change it` : it.submitted ? 'Automatic mark: type another one to change it' : 'Nothing submitted'}"></td>`)).join('')}
       <td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b>${fmtMark(sheet.total)}</b></button>`}</td><td>${r.missing ? '—' : `<button class="linklike" data-exstudent="${esc(r.studentId)}" title="All the answers of this student, with their marks"><b class="grade">${g7 === undefined ? '—' : g7}</b></button>`}</td>
       <td>${r.finishedAt ? new Date(r.finishedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '<span class="muted">—</span>'}</td>
       <td>${awayCell(r)}</td></tr>`).join('')}</tbody></table></div>`);
@@ -386,6 +435,8 @@ function renderExamResults() {
     a.click();
   };
   $('exVerify').onclick = verifyExam;
+  $('exAiLog').onclick = () => aiLog(e);
+  if ($('exAiErrLog')) $('exAiErrLog').onclick = () => aiLog(e);
   $('exAi').onclick = () => (X.fromFile ? alert('Opened from a backup file: the AI marking needs the database.') : aiMarkExam());
   $('exShare').onclick = () => (X.fromFile ? alert('Opened from a backup file: the correction links need the database.') : shareCorrections());
   document.querySelectorAll('[data-exview]').forEach((b) => {
@@ -476,7 +527,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
         const it = sheet.items.find((x) => x.key === `${cid}#${k}`);
         return `<div class="ev-q"><p><b>${k + 1}. ${esc(q.q)}</b>${q.multi ? ' <span class="q-multi">(several answers)</span>' : ''}</p>${q.code ? `<div class="q-code" data-evq="${esc(cid)}:${k}"></div>` : ''}
           ${q.open ? openAnswerHtml(q, answers[k]) : q.options.map((o, j) => { const p = quizPicked(q, answers[k], j), ok = quizRight(q, j); return `<div class="wq-opt${ok ? ' right' : ''}${p ? (ok ? ' picked-ok' : ' picked-ko') : ''}">${p ? (ok ? '✔' : '✖') : ok ? '○' : '·'} ${esc(o)}</div>`; }).join('')}
-          ${markRow(it)}</div>`;
+          ${aiBox(r, `${cid}#${k}`, it)}${markRow(it)}</div>`;
       }).join('')}</section>`;
     }
     const it = sheet.items.find((x) => x.key === cid);
@@ -579,7 +630,7 @@ function renderReview(k) {
     if (!c) return '<span class="muted">nothing submitted</span>';
     if (q) {
       const given = ((c.program && c.program.answers) || [])[it.q];
-      if (q.open) return openAnswerHtml(q, given, false);
+      if (q.open) return openAnswerHtml(q, given, false) + aiBox(r, it.key, sheetItem);
       const picked = q.options.map((o, i) => (quizPicked(q, given, i) ? `<div class="wq-opt ${quizRight(q, i) ? 'picked-ok' : 'picked-ko'}">${quizRight(q, i) ? '✔' : '✖'} ${esc(o)}</div>` : '')).join('');
       return picked || '<span class="muted">no answer</span>';
     }
