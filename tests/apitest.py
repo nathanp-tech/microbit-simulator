@@ -161,6 +161,7 @@ s, r = call('POST', '/api/exam/comment', {'examId': eid, 'studentId': A, 'key': 
 s, r = call('POST', '/api/exam/comment', {'examId': eid, 'studentId': A, 'key': 'c2#0', 'text': None}, teacher=True); check(s == 200 and 'c2#0' not in r['comments'], 'a comment taken back')
 # correction links: signed, opened by the teacher, no password
 def corr(sid, key): return call('GET', f'/api/correction?e={eid}&s={sid}&k={key}', klass='')
+s, r = call('GET', f'/api/correction?e={eid}&s={A}&preview=1', teacher=True); check(s == 200, 'the teacher previews a correction before sharing it', r)
 s, r = call('POST', '/api/exam', {'action': 'share', 'examId': eid, 'grades': {A: 5}}); check(s in (401, 403), 'a student cannot share the corrections')
 s, r = call('POST', '/api/exam', {'action': 'share', 'examId': eid, 'grades': {A: 5}}, teacher=True)
 key = next((l['key'] for l in r.get('links', []) if l['studentId'] == A), '')
@@ -168,6 +169,8 @@ check(s == 200 and key and r['exam'].get('shared'), 'teacher shares the correcti
 s, r = corr(A, key); check(s == 200 and r['grade'] == 5 and r['result']['marks'] == {'c1': 2.5} and 'alts' not in json.dumps(r) and 'away' not in json.dumps(r), 'correction link: own marks and grade, nothing else', r)
 check(str(r['result'].get('comments', {}).get('c1', '')).startswith('Good job') and '"ai"' not in json.dumps(r) and 'teacherNote' not in json.dumps(r), 'correction: the teacher comment, nothing called AI, no note for the teacher', r['result'].get('comments'))
 s, r = corr(A, key[:-1] + ('0' if key[-1] != '0' else '1')); check(s == 404, 'correction link with a wrong key refused')
+s, r = call('GET', f'/api/correction?e={eid}&s={A}&preview=1', klass=''); check(s == 404, 'a preview without the teacher code is refused')
+s, r = call('GET', f'/api/correction?e={eid}&s={A}&preview=1', teacher=True); check(s == 200 and r['result']['marks'] == {'c1': 2.5}, 'the teacher previews a correction', r)
 s, r = corr(B, key); check(s == 404, 'the key of one student does not open another one')
 s, r = call('POST', '/api/exam', {'action': 'share', 'examId': eid, 'on': False}, teacher=True); check(s == 200 and not r['exam'].get('shared'), 'teacher closes the corrections')
 s, r = corr(A, key); check(s == 403, 'closed: the link does not open any more')

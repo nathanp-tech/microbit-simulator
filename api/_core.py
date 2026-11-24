@@ -743,13 +743,14 @@ class Api:
         if path == '/api/correction':
             # the correction page of one student (link given by the teacher once the test is marked): no password, no class code
             eid, sid, key = str(params.get('e', '')), str(params.get('s', '')), str(params.get('k', ''))
-            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not hmac.compare_digest(key, self.corr_token(eid, sid)):
+            preview = params.get('preview') == '1' and self.is_teacher(ctx, params)  # the teacher looks at it first
+            if not ID.fullmatch(eid) or not ID.fullmatch(sid) or not (preview or hmac.compare_digest(key, self.corr_token(eid, sid))):
                 return 404, {'error': 'This correction link is not right. Ask your teacher.'}
             raw = self.r(['HGET', P + 'exams', eid], ['HGET', P + 'examres:' + eid, sid])
             exam, res = jload(raw[0]), jload(raw[1], {}) or {}
             if not exam or not res:
                 return 404, {'error': 'This correction link is not right. Ask your teacher.'}
-            shared = exam.get('shared')
+            shared = exam.get('shared') or ({'grades': {}} if preview else None)
             if not shared:
                 return 403, {'error': 'Your teacher has not opened the correction of this test yet.'}
             sols = self.solutions()

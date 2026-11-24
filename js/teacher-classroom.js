@@ -576,6 +576,7 @@ function examViewer(sid, part = 0, back = renderExamResults) {
   openModal(`<div class="ev-top"><div class="ev-head"><button id="evBack">← ${back === renderExamResults ? 'Results' : 'Back'}</button>
       <h2>${esc(r.name)} <span class="muted">· ${esc(e.title)}</span></h2><span style="flex:1"></span>
       ${r.missing || X.fromFile ? '' : `<button id="evAi" title="The AI (OpenAI) reads this student's programs and typed answers: a mark and a short comment for each. You can change the marks">🤖 ${r.ai && Object.keys(r.ai).length ? 'AI marking again' : 'AI marking'}</button>`}
+      ${r.missing || X.fromFile ? '' : `<button id="evPreview" title="Their correction exactly as they will see it (marks, comments, right answers), before you share it">👁 Student's view</button>`}
       <span class="ev-total">${fmtMark(sheet.total)} / ${fmtMark(sheet.max)} · grade <b>${g7 === undefined ? '—' : g7} / 7</b></span>
       <button id="evPrev"${idx ? '' : ' disabled'} title="Previous student (←)">‹</button>
       <select id="evPick" title="Go to a student">${list.map((x, i) => `<option value="${esc(keyOf(x.r))}"${i === idx ? ' selected' : ''}>${esc(x.r.name)}${x.r.missing ? ' · no result' : ` · ${fmtMark(x.sheet.total)}/${fmtMark(x.sheet.max)}${x.g7 !== undefined ? ' · ' + x.g7 + '/7' : ''}`}</option>`).join('')}</select>
@@ -585,6 +586,9 @@ function examViewer(sid, part = 0, back = renderExamResults) {
   $('modal').querySelector('.modal-box').style.maxWidth = '1200px';
   const box = $('modal').querySelector('.modal-box');
   $('evBack').onclick = () => { stopExamViewer(); back(); };
+  if ($('evPreview')) $('evPreview').onclick = () => {
+    window.open(`correction.html?e=${encodeURIComponent(e.id)}&s=${encodeURIComponent(r.studentId)}&preview=1${g7 !== undefined ? '&g=' + g7 : ''}`, '_blank');
+  };
   if ($('evAi')) $('evAi').onclick = () => {
     const say = (t) => { const m = $('evAiMsg'); if (m) { m.hidden = false; m.textContent = t; m.classList.toggle('bad', /^⚠/.test(t)); } };
     $('evAi').disabled = true;

@@ -43,12 +43,26 @@ function renderProgramInto(div, program, scale = 0.8) {
   const w = Blockly.inject(div, { readOnly: true, renderer: 'makecode', theme: MB_THEME, media: 'lib/blockly/media/', sounds: false,
     move: { scrollbars: false, drag: false, wheel: false }, zoom: { controls: false, wheel: false, startScale: scale } });
   try { Blockly.serialization.workspaces.load(program, w); } catch (e) { div.textContent = 'This program cannot be shown.'; return w; }
-  const bb = w.getBlocksBoundingBox();
-  if (!isFinite(bb.left) || bb.right <= bb.left) { div.style.height = '30px'; div.textContent = 'No blocks.'; return w; }
-  div.style.width = Math.ceil((bb.right - bb.left) * w.scale + 20) + 'px';
-  div.style.height = Math.ceil((bb.bottom - bb.top) * w.scale + 20) + 'px';
-  Blockly.svgResize(w);
-  w.getCanvas().setAttribute('transform', `translate(${10 - bb.left * w.scale},${10 - bb.top * w.scale}) scale(${w.scale})`);
+  // Blockly draws (and may move) the blocks a moment after loading: the frame is measured again then, and the blocks are
+  // pinned in it (a resize of the page must not move them)
+  const fit = () => { try { fitNow(); } catch (e) { /* the workspace was closed meanwhile */ } };
+  const fitNow = () => {
+    if (w.isDisposed && w.isDisposed()) return;
+    try { if (Blockly.renderManagement && Blockly.renderManagement.finishQueuedRenders) Blockly.renderManagement.finishQueuedRenders(); } catch (e) { /* older Blockly */ }
+    const bb = w.getBlocksBoundingBox();
+    if (!isFinite(bb.left) || bb.right <= bb.left) { div.style.height = '30px'; div.textContent = 'No blocks.'; return; }
+    div.style.width = Math.ceil((bb.right - bb.left) * w.scale + 20) + 'px';
+    div.style.height = Math.ceil((bb.bottom - bb.top) * w.scale + 20) + 'px';
+    Blockly.svgResize(w);
+    w.pinned = [10 - bb.left * w.scale, 10 - bb.top * w.scale];
+    w.getCanvas().setAttribute('transform', `translate(${w.pinned[0]},${w.pinned[1]}) scale(${w.scale})`);
+  };
+  const translate = w.translate.bind(w);
+  w.translate = (x, y) => translate(...(w.pinned || [x, y]));
+  fit();
+  requestAnimationFrame(fit);
+  setTimeout(fit, 300);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
   return w;
 }
 function renderQuizCode(root, questions) {

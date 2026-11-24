@@ -10,7 +10,9 @@ const keepWs = [];
   const q = new URLSearchParams(location.search);
   let d;
   try {
-    const r = await fetch(`api/correction?e=${encodeURIComponent(q.get('e') || '')}&s=${encodeURIComponent(q.get('s') || '')}&k=${encodeURIComponent(q.get('k') || '')}`, { cache: 'no-store' });
+    const preview = q.get('preview') === '1';
+    const r = await fetch(`api/correction?e=${encodeURIComponent(q.get('e') || '')}&s=${encodeURIComponent(q.get('s') || '')}&k=${encodeURIComponent(q.get('k') || '')}${preview ? '&preview=1' : ''}`,
+      { cache: 'no-store', headers: preview ? { 'X-Teacher-Code': localStorage.getItem('mbsim.teacherCode') || '' } : {} });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || 'This correction cannot be opened.');
   } catch (e) {
@@ -18,6 +20,11 @@ const keepWs = [];
     return;
   }
   const exam = d.exam, res = d.result;
+  if (q.get('preview') === '1') {
+    // the teacher's preview: the grade of the results table, and a banner (the student never sees it)
+    if (q.get('g')) d.grade = Number(q.get('g'));
+    document.title = 'Preview · ' + document.title;
+  }
   const chs = exam.challenges.map((id) => CHALLENGES.find((c) => c.id === id)).filter(Boolean);
   // the scores of the programs: checked again (deterministic), like the teacher's Verify
   const checked = {}, owns = [], sols = [];
@@ -37,7 +44,7 @@ const keepWs = [];
       qFeedback: ch.quiz ? ch.questions.map((q, i) => (res.comments || {})[`${ch.id}#${i}`]) : null });
   });
   const fm = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
-  root.innerHTML = `<div class="corr-head"><h1>✏️ My correction · ${esc(exam.title)}</h1>
+  root.innerHTML = (q.get('preview') === '1' ? `<div class="corr-preview">👁 <b>Preview</b>: what ${esc(res.name)} will see once you share the corrections. Changed a mark or a comment? Reload this page.</div>` : '') + `<div class="corr-head"><h1>✏️ My correction · ${esc(exam.title)}</h1>
       <div class="muted">${esc(res.name)} · ${esc(exam.className)}${exam.startedAt ? ' · ' + new Date(exam.startedAt * 1000).toLocaleDateString() : ''}</div>
       <div class="corr-sum"><div>Marks<b>${fm(sheet.total)} / ${fm(sheet.max)}</b></div>${d.grade ? `<div>Grade<b>${d.grade} / 7</b></div>` : ''}</div>
       <p class="muted" style="margin:12px 0 0">For each part: your marks, what worked (✔) and what did not (✖), the right answers and a program that works.</p></div>
